@@ -1,0 +1,84 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 12px 40px;
+
+  background-color: #ffffff; 
+  opacity: 100;               
+  
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 1000;
+}
+
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+}
+
+.navbar-left img {
+  width: 40px;
+}
+
+.navbar-center a {
+  margin: 0 15px;
+  text-decoration: none;
+  color: rgb(0, 0, 0);
+  font-weight: 500;
+}
+
+.navbar-right .btn {
+  padding: 6px 15px;
+  margin-left: 10px;
+  text-decoration: none;
+  color: white;
+  background: rgb(0, 0, 0);
+  border-radius: 4px;
+}
+
+
+.navbar-center {
+  display: flex;
+  gap: 15px;
+}
+
+.nav-box {
+  padding: 8px 16px;
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+
+  text-decoration: none;
+  color: #000;
+  font-weight: 500;
+
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.nav-box:hover {
+  background-color: #000000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.account-label {
+  margin-right: 10px;
+  font-weight: 500;
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 6px 15px;
+  border-radius: 4px;
+  background: rgb(0, 0, 0);
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.account-label:hover {
+  background-color: #333;
+  transform: translateY(-2px);
+}

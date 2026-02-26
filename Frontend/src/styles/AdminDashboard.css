@@ -1,0 +1,78 @@
+
+.admin-container {
+  width: 95%;
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 0 12px 60px 12px;
+  color: #213547; 
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.9);
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  margin-bottom: 12px;
+}
+
+.admin-header h1 { margin: 0; font-size: 20px }
+.admin-header button { margin-left: 12px }
+
+.card {
+  background: white;
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+  margin-bottom: 20px;
+  color: #213547;
+}
+
+.card h2 { margin: 0 0 12px 0 }
+
+.admin-container button {
+  background: #111827;
+  color: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: none;
+}
+.admin-container button[onClick] { cursor: pointer }
+
+.card input[type="text"], .card input[type="search"], .card select, .card textarea {
+  border: 1px solid #e6e6e6;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.card table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.card th, .card td { padding: 10px 8px; border-bottom: 1px solid #f1f1f1; text-align: left; color: #213547 }
+.card thead th { background: #f7f9fb }
+
+.admin-header, .admin-header h1 { color: #111827 }
+
+.admin-container button { color: #fff }
+
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:1000 }
+.modal-content { width: 100%; max-width: 980px; background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.25) }
+
+.admin-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.85);
+  pointer-events: none;
+  z-index: -1;
+}
+
+@media (max-width: 800px) {
+  .modal-content { padding: 12px }
+  .admin-header { flex-direction: column; gap: 8px }
+}
