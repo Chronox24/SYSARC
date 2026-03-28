@@ -39,8 +39,11 @@ export default function Navbar() {
 
   return (
     <header className="navbar">
-      <div className="navbar-left">
-        <span>Barangay 830</span>
+      <div className="navbar-left" onClick={() => navigate("/")}>
+        <div className="navbar-logo-container">
+          <img src="/logo_brgy.png" alt="Logo" className="navbar-logo" />
+        </div>
+        <span className="navbar-brand">Barangay 830</span>
       </div>
 
       <nav className="navbar-center">
@@ -49,14 +52,14 @@ export default function Navbar() {
       <div className="navbar-right">
         {!user ? (
           <>
-            <Link className="btn signin" to="/login">Sign in</Link>
-            <Link className="btn signup" to="/register">Sign up</Link>
+            <Link className="nav-btn-outline" to="/login">Sign in</Link>
+            <Link className="nav-btn-primary" to="/register">Sign up</Link>
           </>
         ) : (
           <>
-            <Link className="nav-box" to="/request">Request a Form</Link>
-            <Link to="/profile" className="account-label">Account</Link>
-            <button className="btn signup" onClick={handleLogout}>
+            <Link className="nav-link-item" to="/request">Request a Form</Link>
+            <Link className="nav-link-item" to="/profile">My Account</Link>
+            <button className="nav-btn-logout" onClick={handleLogout}>
               Sign Out
             </button>
           </>

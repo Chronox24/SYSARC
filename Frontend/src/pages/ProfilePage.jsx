@@ -10,6 +10,8 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const [photoFile, setPhotoFile] = useState(null)
 
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser')
@@ -22,16 +24,46 @@ export default function ProfilePage() {
     }
   }, [navigate])
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setPhotoFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   const fetchUserDetails = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/user/${userId}`)
+      const response = await fetch(`http://127.0.0.1:5000/api/user/${userId}`)
       const data = await response.json()
       if (response.ok) {
         setUser(prev => ({ ...prev, ...data }))
         setEditData(data)
+        if (data.photo) {
+          setPhotoPreview(data.photo)
+        }
       }
       
-      const requestsResponse = await fetch(`http://localhost:5000/api/dashboard/${userId}`)
+      const requestsResponse = await fetch(`http://127.0.0.1:5000/api/dashboard/${userId}`)
       const requestsData = await requestsResponse.json()
       setRequests(Array.isArray(requestsData) ? requestsData : [])
       setLoading(false)
@@ -51,20 +83,43 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
-      const response = await fetch(`http://localhost:5000/api/user/${user.id}`, {
+      const formData = new FormData()
+      
+      // List of fields the backend expects
+      const expectedFields = [
+        'full_name', 'nickname', 'gender', 'age', 'date_of_birth',
+        'religion', 'civil_status', 'barangay', 'city_municipality',
+        'home_address', 'mobile_phone', 'post_grad_course', 'post_grad_year',
+        'college_course', 'college_year', 'high_school', 'high_school_year',
+        'elementary', 'elementary_year', 'other_education', 'other_year',
+        'emergency_name', 'emergency_phone', 'relationship'
+      ];
+      
+      expectedFields.forEach(field => {
+        const value = editData[field];
+        if (value !== undefined && value !== null) {
+          formData.append(field, value);
+        }
+      });
+      
+      if (photoFile) {
+        formData.append('photo', photoFile)
+      }
+
+      const response = await fetch(`http://127.0.0.1:5000/api/user/${user.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editData)
+        body: formData
       })
 
       if (response.ok) {
-        setUser(editData)
+        // Fetch updated data after saving
+        await fetchUserDetails(user.id)
         setIsEditing(false)
+        setPhotoFile(null)
         alert('Profile updated successfully!')
       } else {
-        alert('Failed to update profile')
+        const errorData = await response.json()
+        alert(`Failed to update profile: ${errorData.message || 'Unknown error'}`)
       }
     } catch (err) {
       console.error('Failed to update profile:', err)
@@ -105,6 +160,40 @@ export default function ProfilePage() {
       </div>
 
       <div className="profile-content">
+        <div className="profile-card photo-card">
+          <div className="profile-photo-container">
+            <div className="profile-photo-preview">
+              {photoPreview ? (
+                <img src={photoPreview} alt="Profile" />
+              ) : (
+                <div className="photo-placeholder">No Photo</div>
+              )}
+            </div>
+            {isEditing && (
+              <div className="photo-upload-controls">
+                <input
+                  type="file"
+                  id="photo-input"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  style={{ display: 'none' }}
+                />
+                <label htmlFor="photo-input" className="photo-upload-btn">
+                  {photoFile ? 'Change Photo' : 'Upload Photo'}
+                </label>
+                {photoFile && <p className="file-name">{photoFile.name}</p>}
+              </div>
+            )}
+          </div>
+          <div className="profile-basic-info">
+            <h2>{user?.full_name}</h2>
+            <p className="profile-email">{user?.email}</p>
+            <span className={`profile-status ${user?.civil_status?.toLowerCase()}`}>
+              {user?.civil_status || 'Resident'}
+            </span>
+          </div>
+        </div>
+
         <div className="profile-card">
           <h2>Personal Information</h2>
           <div className="info-grid">
@@ -177,11 +266,11 @@ export default function ProfilePage() {
               {isEditing ? (
                 <input
                   type="date"
-                  value={editData?.date_of_birth || ''}
+                  value={editData?.date_of_birth ? new Date(editData.date_of_birth).toISOString().split('T')[0] : ''}
                   onChange={(e) => handleEditChange('date_of_birth', e.target.value)}
                 />
               ) : (
-                <p>{user?.date_of_birth || 'N/A'}</p>
+                <p>{formatDate(user?.date_of_birth)}</p>
               )}
             </div>
             <div className="info-item">

@@ -27,7 +27,7 @@ export default function AdminLoginPage() {
         return
       }
 
-      const response = await fetch('http://localhost:5000/api/admin/login', {
+      const response = await fetch('http://127.0.0.1:5000/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -68,17 +68,21 @@ export default function AdminLoginPage() {
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1 className="auth-title">Admin Login</h1>
+        <div className="auth-logo-container">
+          <img src="/logo_brgy.png" alt="Logo" className="auth-logo" />
+          <h1 className="auth-title">Admin Access</h1>
+          <p className="auth-subtitle">Sign in to the Barangay 830 Admin Dashboard</p>
+        </div>
         
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message">⚠️ {error}</div>}
 
         <form onSubmit={handleLogin} className="auth-form">
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Administrator Email</label>
             <input
               id="email"
               type="email"
-              placeholder="Enter your email"
+              placeholder="admin@brgy830.gov"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -86,28 +90,24 @@ export default function AdminLoginPage() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">Security Password</label>
             <input
               id="password"
               type="password"
-              placeholder="Enter your password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
             />
           </div>
 
-          <button 
-            type="submit" 
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? 'Logging in...' : 'Login'}
+          <button type="submit" className="auth-button" disabled={loading}>
+            {loading ? 'Verifying Credentials...' : 'Sign In as Administrator'}
           </button>
         </form>
 
         <div className="auth-footer">
-          <p><Link to="/">Back to User Login</Link></p>
+          <p>Looking for the resident login? <Link to="/login" className="auth-link">Resident Portal</Link></p>
         </div>
       </div>
     </div>

@@ -11,10 +11,14 @@ USE `brgy_database`;
 -- Drop existing tables if they exist (to replace old schema)
 --
 
+SET FOREIGN_KEY_CHECKS = 0;
+
 DROP TABLE IF EXISTS `certificate_requests`;
 DROP TABLE IF EXISTS `residents`;
 DROP TABLE IF EXISTS `admins`;
 DROP TABLE IF EXISTS `users`;
+
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- --------------------------------------------------------
 
@@ -51,7 +55,8 @@ CREATE TABLE `residents` (
   `emergency_phone` varchar(20) DEFAULT NULL,
   `emergency_address` text DEFAULT NULL,
   `relationship` varchar(50) DEFAULT NULL,
-  `signature_file` varchar(255) DEFAULT NULL,
+  `signature_file` longblob DEFAULT NULL,
+  `photo` longblob DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
@@ -70,6 +75,7 @@ CREATE TABLE `certificate_requests` (
   `request_date` datetime DEFAULT CURRENT_TIMESTAMP,
   `verification_status` enum('Verified','Not Verified','Not Valid') DEFAULT 'Not Verified',
   `process_status` enum('In process','Claimed','Void') DEFAULT 'In process',
+  `certificate_content` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),

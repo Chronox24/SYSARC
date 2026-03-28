@@ -11,7 +11,7 @@ export default function RegistrationPage() {
     ConfirmEmailAddress: '',
     Password: '',
     ConfirmPassword: '',
-    DateofBirth: '00/00/0000',
+    DateofBirth: '',
     Gender: '',
     Age: '',
     Religion:'',
@@ -106,7 +106,7 @@ const handleRegister = async (e) => {
     }
 
     console.log("📝 Sending registration request...")
-    const response = await fetch('http://localhost:5000/api/register', {
+    const response = await fetch('http://127.0.0.1:5000/api/register', {
       method: 'POST',
       body: formDataWithPhoto
     })
@@ -133,421 +133,132 @@ const handleRegister = async (e) => {
 
 return (
   <div className="auth-container">
-    <div className="auth-card">
-      <h1>Registration</h1>
-      {error && <div className="error-message">{error}</div>}
+    <div className="auth-card register">
+      <div className="auth-logo-container">
+        <img src="/logo_brgy.png" alt="Logo" className="auth-logo" />
+        <h1 className="auth-title">Create Account</h1>
+        <p className="auth-subtitle">Join the Barangay 830 community</p>
+      </div>
+
+      {error && <div className="error-message">⚠️ {error}</div>}
+
       <form onSubmit={handleRegister} className="auth-form">
-        <div className="form-grid">
-          <div className="left-col">
-            <h3 className="section-title">PERSONAL INFORMATION</h3>
-            <div className="personal-grid">
-              <div className="form-group">
-                <label htmlFor="fullName">Full Name</label>
-                <input
-                  id="fullName"
-                  type="text"
-                  name="FullName"
-                  placeholder="Enter your full name"
-                  value={formData.FullName}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="nickname">Nickname</label>
-                <input
-                  id="nickname"
-                  type="text"
-                  name="Nickname"
-                  placeholder="Enter your nickname"
-                  value={formData.Nickname}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="emailAddress">Email Address</label>
-                <input
-                  id="emailAddress"
-                  type="email"
-                  name="EmailAddress"
-                  placeholder="Enter your email address"
-                  value={formData.EmailAddress}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirmEmailAddress">Confirm Email Address</label>
-                <input
-                  id="confirmEmailAddress"
-                  type="email"
-                  name="ConfirmEmailAddress"
-                  placeholder="Confirm your email address"
-                  value={formData.ConfirmEmailAddress}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="Password">Password</label>
-                <input
-                  id="Password"
-                  type="password"
-                  name="Password"
-                  placeholder="Enter your password"
-                  value={formData.Password}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm Password</label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  name="ConfirmPassword"
-                  placeholder="Confirm your password"
-                  value={formData.ConfirmPassword}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="dateOfBirth">Date of Birth</label>
-                <input
-                  id="dateOfBirth"
-                  type="date"
-                  name="DateofBirth"
-                  value={formData.DateofBirth}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="gender">Gender</label>
-                <select
-                  id="gender"
-                  name="Gender"
-                  value={formData.Gender}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="age">Age</label>
-                <input
-                  id="age"
-                  type="number"
-                  name="Age"
-                  placeholder="Enter your age"
-                  value={formData.Age}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="religion">Religion</label>
-                <input
-                  id="religion"
-                  type="text"
-                  name="Religion"
-                  placeholder="Enter your religion"
-                  value={formData.Religion}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="barangay">Barangay</label>
-                <input
-                  id="barangay"
-                  type="text"
-                  name="Barangay"
-                  placeholder="Enter your barangay"
-                  value={formData.Barangay}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="mobilePhone">Mobile Phone Number</label>
-                <input
-                  id="mobilePhone"
-                  type="text"
-                  name="MobilePhone"
-                  placeholder="Enter your mobile phone number"
-                  value={formData.MobilePhone}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="cityMunicipality">City/Municipality</label>
-                <input
-                  id="cityMunicipality"
-                  type="text"
-                  name="City/Municipality"
-                  placeholder="Enter your city/municipality"
-                  value={formData['City/Municipality']}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="homeAddress">Home Address</label>
-                <input
-                  id="homeAddress"
-                  type="text"
-                  name="HomeAddress"
-                  placeholder="Enter your home address"
-                  value={formData.HomeAddress}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="civilStatus">Civil Status</label>
-                <select
-                  id="civilStatus"
-                  name="CivilStatus"
-                  value={formData.CivilStatus}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  <option value="">Select Civil Status</option>
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Widowed">Widowed</option>
-                  <option value="Separated">Separated</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="photo-upload">
-            <div className="photo-preview">
-              {photoPreview ? (
-                <img src={photoPreview} alt="preview" />
-              ) : (
-                <div className="photo-placeholder">Attach a file</div>
-              )}
-            </div>
-            <input
-              id="photo"
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              className="photo-input"
-              disabled={loading}
-            />
-            <label htmlFor="photo" className="photo-button">Upload</label>
-            <div className="photo-caption">2 x 2 Attach a file .jpg .jpeg</div>
-          </div>
-        </div>
-    
-        <div className="education-section">
-          <h3 className="section-title">EDUCATIONAL ATTAINMENT</h3>
-          <div className="education-grid">
-            <div className="form-group">
-              <label htmlFor="educLevel">Post Graduate Degree/Course</label>
-              <input
-                id="educLevel"
-                name="Post Graduate Degree/course"
-                value={formData['Post Graduate Degree/course']}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="YearTaken">Year Taken</label>
-              <input
-                id="YearTaken"
-                type="text"
-                name="PostGraduateYear"
-                placeholder="e.g., 2018"
-                value={formData.PostGraduateYear}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="College Degree">College Degree</label>
-              <input
-                id="College Degree"
-                type="text"y
-                name="CollegeDegree"
-                value={formData.CollegeDegree}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="YearTaken2">Year Taken</label>
-              <input
-                id="yearTaken2"
-                type="text"
-                name="CollegeYear"
-                placeholder="e.g., 2018"
-                value={formData.CollegeYear}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="highSchool">High School</label>
-              <input
-                id="highSchool"
-                name="HighSchool"
-                value={formData.HighSchool}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="YearTaken3">Year Taken</label>
-              <input
-                id="yearTaken3"
-                type="text"
-                name="HighSchoolYear"
-                placeholder="e.g., 2018"
-                value={formData.HighSchoolYear}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="Elementary">Elementary School</label>
-              <input
-                id="elementary"
-                name="Elementary"
-                value={formData.Elementary}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="YearTaken4">Year Taken</label>
-              <input
-                id="yearTaken4"
-                type="text"
-                name="ElementaryYear"
-                placeholder="e.g., 2018"
-                value={formData.ElementaryYear}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="Others">Others</label>
-              <input
-                id="Others"
-                name="Others"
-                value={formData.Others}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="yearTaken5">Year Taken</label>
-              <input
-                id="yearTaken5"
-                type="text"
-                name="OthersYear"
-                placeholder="e.g., 2018"
-                value={formData.OthersYear}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-          </div>
-        </div>
-        
         <div className="form-section">
-          <h3 className="section-title">IN CASE OF EMERGENCY, PLEASE NOTIFY</h3>
-          <div className="form-group">
-            <label htmlFor="emergencyName">Contact Name</label>
-            <input
-              id="emergencyName"
-              type="text"
-              name="EmergencyContactName"
-              placeholder="Full name"
-              value={formData.EmergencyContactName}
-              onChange={handleChange}
-              disabled={loading}
-            />
+          <h3 className="section-title">Personal Information</h3>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Full Name</label>
+              <input
+                name="FullName"
+                placeholder="Juan Dela Cruz"
+                value={formData.FullName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Nickname</label>
+              <input
+                name="Nickname"
+                placeholder="Juan"
+                value={formData.Nickname}
+                onChange={handleChange}
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="emergencyRelation">Relation</label>
-            <input
-              id="emergencyRelation"
-              type="text"
-              name="EmergencyContactRelation"
-              placeholder="e.g., Parent, Spouse"
-              value={formData.EmergencyContactRelation}
-              onChange={handleChange}
-              disabled={loading}
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>Email Address</label>
+              <input
+                name="EmailAddress"
+                type="email"
+                placeholder="juan@example.com"
+                value={formData.EmailAddress}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Email</label>
+              <input
+                name="ConfirmEmailAddress"
+                type="email"
+                placeholder="juan@example.com"
+                value={formData.ConfirmEmailAddress}
+                onChange={handleChange}
+                required
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="emergencyPhone">Contact Phone</label>
-            <input
-              id="emergencyPhone"
-              type="text"
-              name="EmergencyContactPhone"
-              placeholder="Phone number"
-              value={formData.EmergencyContactPhone}
-              onChange={handleChange}
-              disabled={loading}
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                name="Password"
+                type="password"
+                placeholder="••••••••"
+                value={formData.Password}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <input
+                name="ConfirmPassword"
+                type="password"
+                placeholder="••••••••"
+                value={formData.ConfirmPassword}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Date of Birth</label>
+              <input
+                name="DateofBirth"
+                type="date"
+                value={formData.DateofBirth}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Gender</label>
+              <select name="Gender" value={formData.Gender} onChange={handleChange} required>
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18 }}>
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? 'Registering...' : 'Register'}
+          <div className="form-group">
+            <label>Profile Photo</label>
+            <input type="file" accept="image/*" onChange={handlePhotoChange} />
+            {photoPreview && (
+              <div className="photo-preview-container">
+                <img src={photoPreview} alt="Preview" className="photo-preview" />
+              </div>
+            )}
+          </div>
+
+          <button type="submit" className="auth-button" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Register Account'}
           </button>
-        </div>
-      </form>
+        </form>
 
-      <div className="auth-footer">
-        <p>Already have an account? <Link to="/">Login here</Link></p>
+        <div className="auth-footer">
+          <p>Already have an account? <Link to="/login" className="auth-link">Sign in instead</Link></p>
+        </div>
       </div>
     </div>
-  </div>
-)
-
+  )
 }

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
 
 import Navbar from "./components/Navbar"
 import LoginPage from "./pages/LoginPage"
@@ -9,16 +9,18 @@ import AboutUs from "./pages/AboutUs"
 import RequestFormPage from "./pages/RequestFormPage"
 import AdminLoginPage from "./pages/AdminLoginPage"
 import AdminDashboardPage from "./pages/AdminDashboardPage"
-import HelpButton from "./components/HelpButton"
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const isAdminPage = location.pathname.startsWith('/admin');
+
   return (
-    <BrowserRouter>
-      <Navbar />   
-      <HelpButton />
+    <>
+      {!isAdminPage && <Navbar />}   
       
       <Routes>
         <Route path="/" element={<AboutUs />} />
+        <Route path="/aboutus" element={<AboutUs />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -29,6 +31,14 @@ function App() {
         <Route path="/admin-login" element={<AdminLoginPage />} />
         <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
       </Routes>
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   )
 }

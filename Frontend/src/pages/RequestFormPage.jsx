@@ -11,160 +11,21 @@ export default function RequestFormPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  const styles = {
-    container: {
-      minHeight: "calc(100vh - 80px)",
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      padding: "20px"
-    },
-    card: {
-      background: "white",
-      borderRadius: "12px",
-      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-      padding: "40px",
-      maxWidth: "500px",
-      width: "100%"
-    },
-    header: {
-      marginBottom: "30px"
-    },
-    title: {
-      fontSize: "28px",
-      fontWeight: "700",
-      color: "#333",
-      margin: "0 0 10px 0",
-      display: "flex",
-      alignItems: "center",
-      gap: "10px"
-    },
-    subtitle: {
-      color: "#666",
-      fontSize: "14px",
-      margin: "0"
-    },
-    form: {
-      display: "flex",
-      flexDirection: "column",
-      gap: "20px"
-    },
-    formGroup: {
-      display: "flex",
-      flexDirection: "column",
-      gap: "8px"
-    },
-    label: {
-      fontSize: "14px",
-      fontWeight: "600",
-      color: "#333",
-      textTransform: "uppercase",
-      letterSpacing: "0.5px"
-    },
-    select: {
-      padding: "12px 14px",
-      border: "2px solid #e0e0e0",
-      borderRadius: "8px",
-      fontSize: "14px",
-      fontFamily: "inherit",
-      transition: "border-color 0.3s ease",
-      cursor: "pointer"
-    },
-    textarea: {
-      padding: "12px 14px",
-      border: "2px solid #e0e0e0",
-      borderRadius: "8px",
-      fontSize: "14px",
-      fontFamily: "inherit",
-      resize: "vertical",
-      minHeight: "100px",
-      transition: "border-color 0.3s ease"
-    },
-    button: {
-      padding: "12px 24px",
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      color: "white",
-      border: "none",
-      borderRadius: "8px",
-      fontSize: "15px",
-      fontWeight: "600",
-      cursor: "pointer",
-      transition: "transform 0.2s ease, box-shadow 0.2s ease",
-      marginTop: "10px",
-      boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)"
-    },
-    backLink: {
-      textAlign: "center",
-      marginTop: "20px",
-      paddingTop: "20px",
-      borderTop: "1px solid #e0e0e0"
-    },
-    link: {
-      color: "#667eea",
-      textDecoration: "none",
-      fontSize: "14px",
-      fontWeight: "500",
-      transition: "color 0.2s ease"
-    },
-    loginContainer: {
-      textAlign: "center"
-    },
-    loginText: {
-      color: "#666",
-      marginBottom: "30px",
-      fontSize: "15px"
-    },
-    actions: {
-      display: "flex",
-      gap: "12px",
-      flexDirection: "column"
-    },
-    button2: {
-      padding: "12px 24px",
-      border: "none",
-      borderRadius: "8px",
-      fontSize: "15px",
-      fontWeight: "600",
-      cursor: "pointer",
-      transition: "all 0.2s ease",
-      textDecoration: "none",
-      textAlign: "center"
-    }
-  }
-
   if (!currentUser) {
     return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <div style={styles.header}>
-            <h1 style={styles.title}>📋 Request a Form</h1>
+      <div className="request-page-wrapper">
+        <div className="request-card">
+          <div className="request-header">
+            <h1>📋 Request a Form</h1>
+            <p>You must be registered and logged in to request certificates or forms.</p>
           </div>
-          <div style={styles.loginContainer}>
-            <p style={styles.loginText}>You must be registered and logged in to request certificates or forms.</p>
-            <div style={styles.actions}>
-              <Link 
-                to="/register" 
-                style={{
-                  ...styles.button2,
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "white"
-                }}
-              >
-                Register Now
-              </Link>
-              <Link 
-                to="/" 
-                style={{
-                  ...styles.button2,
-                  background: "#f5f5f5",
-                  color: "#333",
-                  border: "2px solid #e0e0e0"
-                }}
-              >
-                Log In Now
-              </Link>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <Link to="/register" className="btn-submit" style={{ textDecoration: 'none', textAlign: 'center' }}>
+              Register Now
+            </Link>
+            <Link to="/login" className="back-link" style={{ textAlign: 'center' }}>
+              Already have an account? Log In
+            </Link>
           </div>
         </div>
       </div>
@@ -186,101 +47,90 @@ export default function RequestFormPage() {
         return
       }
 
-      const response = await fetch("http://localhost:5000/api/request-certificate", {
+      const response = await fetch("http://127.0.0.1:5000/api/request-certificate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           user_id: user.id,
-          certificate_type: certificateType
+          certificate_type: certificateType,
+          purpose: purpose || `Certificate for ${user.full_name}`
         })
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        setError(data.message || "Failed to submit request")
-        setLoading(false)
-        return
+      if (response.ok) {
+        setSuccess("Your request has been submitted successfully!")
+        setCertificateType("")
+        setPurpose("")
+        setTimeout(() => {
+          navigate("/dashboard")
+        }, 2000)
+      } else {
+        setError(data.message || "Something went wrong")
       }
-
-      setSuccess("Request submitted successfully!")
-      setCertificateType("")
-      setPurpose("")
-      
-      setTimeout(() => {
-        navigate("/dashboard")
-      }, 1500)
     } catch (err) {
-      setError("Failed to submit request. Please check if the server is running.")
+      setError("Failed to connect to the server. Please check if the backend is running.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>📋 Request a Form</h1>
-          <p style={styles.subtitle}>Available for {user.full_name}</p>
+    <div className="request-page-wrapper">
+      <div className="request-card">
+        <div className="request-header">
+          <h1>📋 Request a Form</h1>
+          <p>Fill out the details below to request a barangay certificate.</p>
         </div>
 
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="success-message">{success}</div>}
+        {error && <div className="error-message">⚠️ {error}</div>}
+        {success && <div className="success-message">✅ {success}</div>}
 
-        <form style={styles.form} onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Certificate Type</label>
-            <select
-              style={styles.select}
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Certificate Type</label>
+            <select 
+              className="form-select"
               value={certificateType}
               onChange={(e) => setCertificateType(e.target.value)}
-              onFocus={(e) => e.target.style.borderColor = "#667eea"}
-              onBlur={(e) => e.target.style.borderColor = "#e0e0e0"}
-              disabled={loading}
               required
             >
-              <option value="">Select a certificate type</option>
-              <option value="Barangay Clearance">🆔 Barangay Clearance</option>
-              <option value="Certificate of Residency">🏠 Certificate of Residency</option>
-              <option value="Indigency Certificate">📄 Indigency Certificate</option>
+              <option value="">-- Select Certificate --</option>
+              <option value="Barangay Clearance">Barangay Clearance</option>
+              <option value="Certificate of Residency">Certificate of Residency</option>
+              <option value="Certificate of Indigency">Certificate of Indigency</option>
+              <option value="Barangay ID">Barangay ID</option>
+              <option value="First Time Job Seeker">First Time Job Seeker</option>
             </select>
           </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Purpose (Optional)</label>
-            <textarea
-              style={styles.textarea}
-              placeholder="Enter the purpose for your request..."
+          <div className="form-group">
+            <label>Purpose of Request</label>
+            <textarea 
+              className="form-textarea"
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              onFocus={(e) => e.target.style.borderColor = "#667eea"}
-              onBlur={(e) => e.target.style.borderColor = "#e0e0e0"}
-              disabled={loading}
+              placeholder="e.g., Job application, Scholarship, Proof of residence..."
+              required
             />
           </div>
 
-          <button
-            type="submit"
-            style={styles.button}
+          <button 
+            type="submit" 
+            className="btn-submit"
             disabled={loading}
-            onMouseEnter={(e) => {
-              e.target.style.transform = "translateY(-2px)"
-              e.target.style.boxShadow = "0 6px 16px rgba(102, 126, 234, 0.4)"
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = "translateY(0)"
-              e.target.style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.3)"
-            }}
           >
             {loading ? "Submitting..." : "Submit Request"}
           </button>
         </form>
 
-        <div style={styles.backLink}>
-          <Link to="/dashboard" style={styles.link}>← Back to Dashboard</Link>
+        <div className="back-to-dashboard">
+          <Link to="/dashboard" className="back-link">
+            ← Back to Dashboard
+          </Link>
         </div>
       </div>
     </div>
