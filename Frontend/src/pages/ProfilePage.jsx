@@ -12,6 +12,10 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
+  const [idPhotoPreview, setIdPhotoPreview] = useState(null)
+  const [idPhotoFile, setIdPhotoFile] = useState(null)
+  const [originalPhotoPreview, setOriginalPhotoPreview] = useState(null)
+  const [originalIdPhotoPreview, setOriginalIdPhotoPreview] = useState(null)
 
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser')
@@ -31,6 +35,18 @@ export default function ProfilePage() {
       const reader = new FileReader()
       reader.onloadend = () => {
         setPhotoPreview(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleIdPhotoChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setIdPhotoFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setIdPhotoPreview(reader.result)
       }
       reader.readAsDataURL(file)
     }
@@ -61,6 +77,9 @@ export default function ProfilePage() {
         if (data.photo) {
           setPhotoPreview(data.photo)
         }
+        if (data.id_photo || data.idPhoto) {
+          setIdPhotoPreview(data.id_photo || data.idPhoto)
+        }
       }
       
       const requestsResponse = await fetch(`http://127.0.0.1:5000/api/dashboard/${userId}`)
@@ -80,6 +99,23 @@ export default function ProfilePage() {
     }))
   }
 
+  const handleStartEditing = () => {
+    setOriginalPhotoPreview(photoPreview)
+    setOriginalIdPhotoPreview(idPhotoPreview)
+    setPhotoFile(null)
+    setIdPhotoFile(null)
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditData(user)
+    setIsEditing(false)
+    setPhotoFile(null)
+    setIdPhotoFile(null)
+    setPhotoPreview(originalPhotoPreview || user?.photo || null)
+    setIdPhotoPreview(originalIdPhotoPreview || user?.id_photo || user?.idPhoto || null)
+  }
+
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
@@ -92,7 +128,7 @@ export default function ProfilePage() {
         'home_address', 'mobile_phone', 'post_grad_course', 'post_grad_year',
         'college_course', 'college_year', 'high_school', 'high_school_year',
         'elementary', 'elementary_year', 'other_education', 'other_year',
-        'emergency_name', 'emergency_phone', 'relationship'
+        'emergency_name', 'emergency_phone', 'relationship', 'area', 'other_area'
       ];
       
       expectedFields.forEach(field => {
@@ -106,17 +142,21 @@ export default function ProfilePage() {
         formData.append('photo', photoFile)
       }
 
+      if (idPhotoFile) {
+        formData.append('id_photo', idPhotoFile)
+      }
+
       const response = await fetch(`http://127.0.0.1:5000/api/user/${user.id}`, {
         method: 'PUT',
         body: formData
       })
 
       if (response.ok) {
-        // Fetch updated data after saving
+        // Fetch updated data after saving (this will still show old data until approved)
         await fetchUserDetails(user.id)
         setIsEditing(false)
         setPhotoFile(null)
-        alert('Profile updated successfully!')
+        alert('Your profile update request has been submitted for admin approval!')
       } else {
         const errorData = await response.json()
         alert(`Failed to update profile: ${errorData.message || 'Unknown error'}`)
@@ -140,19 +180,18 @@ export default function ProfilePage() {
   return (
     <div className="profile-container">
       <div className="profile-header">
-        <h1>My Profile</h1>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="profile-header-left">
+          <h1>My Profile</h1>
+        </div>
+        <div className="profile-header-right btn-group">
           {!isEditing ? (
-            <button onClick={() => setIsEditing(true)} className="btn-edit">Edit Profile</button>
+            <button onClick={handleStartEditing} className="btn-edit">Edit Profile</button>
           ) : (
             <>
               <button onClick={handleSaveProfile} className="btn-save" disabled={saving}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
-              <button onClick={() => {
-                setEditData(user)
-                setIsEditing(false)
-              }} className="btn-cancel">Cancel</button>
+              <button onClick={handleCancelEdit} className="btn-cancel">Cancel</button>
             </>
           )}
           <button onClick={() => navigate('/dashboard')} className="back-btn">Back to Dashboard</button>
@@ -168,7 +207,35 @@ export default function ProfilePage() {
               ) : (
                 <div className="photo-placeholder">No Photo</div>
               )}
+              <div className="info-item">
+              <label>Area</label>
+              {isEditing ? (
+                <select
+                  value={editData?.area || ''}
+                  onChange={(e) => handleEditChange('area', e.target.value)}
+                >
+                  <option value="">-- Select Area --</option>
+                  <option value="South nagtahan">South nagtahan</option>
+                  <option value="Residences de manila">Residences de manila</option>
+                  <option value="PSC">PSC</option>
+                  <option value="Malacañang Park">Malacañang Park</option>
+                  <option value="Others">Others...</option>
+                </select>
+              ) : (
+                <p>{user?.area === 'Others' ? user?.other_area : user?.area || 'N/A'}</p>
+              )}
             </div>
+            {editData?.area === 'Others' && isEditing && (
+              <div className="info-item">
+                <label>Specify Other Area</label>
+                <input
+                  type="text"
+                  value={editData?.other_area || ''}
+                  onChange={(e) => handleEditChange('other_area', e.target.value)}
+                />
+              </div>
+            )}
+          </div>
             {isEditing && (
               <div className="photo-upload-controls">
                 <input
@@ -179,7 +246,7 @@ export default function ProfilePage() {
                   style={{ display: 'none' }}
                 />
                 <label htmlFor="photo-input" className="photo-upload-btn">
-                  {photoFile ? 'Change Photo' : 'Upload Photo'}
+                  {photoFile ? 'Change Profile Photo' : 'Upload Profile Photo'}
                 </label>
                 {photoFile && <p className="file-name">{photoFile.name}</p>}
               </div>
@@ -188,10 +255,39 @@ export default function ProfilePage() {
           <div className="profile-basic-info">
             <h2>{user?.full_name}</h2>
             <p className="profile-email">{user?.email}</p>
-            <span className={`profile-status ${user?.civil_status?.toLowerCase()}`}>
-              {user?.civil_status || 'Resident'}
-            </span>
+            {user?.is_verified === 'Approved' ? (
+              <span className="profile-verified-badge">✅ Verified</span>
+            ) : (
+              <span className="profile-pending-badge">⏳ Pending Verification</span>
+            )}
           </div>
+        </div>
+
+        <div className="profile-card id-photo-card">
+          <h2>ID Picture</h2>
+          <div className="id-photo-preview">
+            {idPhotoPreview ? (
+              <img src={idPhotoPreview} alt="ID" />
+            ) : (
+              <div className="photo-placeholder">No ID Photo</div>
+            )}
+          </div>
+          {isEditing && (
+            <div className="photo-upload-controls">
+              <input
+                type="file"
+                id="id-photo-input"
+                accept="image/*"
+                onChange={handleIdPhotoChange}
+                style={{ display: 'none' }}
+              />
+              <label htmlFor="id-photo-input" className="photo-upload-btn">
+                {idPhotoFile ? 'Change ID Photo' : (idPhotoPreview ? 'Update ID Photo' : 'Upload ID Photo')}
+              </label>
+              {idPhotoPreview && !idPhotoFile && <p className="file-name">ID photo on file</p>}
+              {idPhotoFile && <p className="file-name">{idPhotoFile.name}</p>}
+            </div>
+          )}
         </div>
 
         <div className="profile-card">
@@ -356,6 +452,34 @@ export default function ProfilePage() {
                 <p>{user?.mobile_phone || 'N/A'}</p>
               )}
             </div>
+            <div className="info-item">
+              <label>Area</label>
+              {isEditing ? (
+                <select
+                  value={editData?.area || ''}
+                  onChange={(e) => handleEditChange('area', e.target.value)}
+                >
+                  <option value="">-- Select Area --</option>
+                  <option value="South nagtahan">South nagtahan</option>
+                  <option value="Residences de manila">Residences de manila</option>
+                  <option value="PSC">PSC</option>
+                  <option value="Malacañang Park">Malacañang Park</option>
+                  <option value="Others">Others...</option>
+                </select>
+              ) : (
+                <p>{user?.area === 'Others' ? user?.other_area : user?.area || 'N/A'}</p>
+              )}
+            </div>
+            {editData?.area === 'Others' && isEditing && (
+              <div className="info-item">
+                <label>Specify Other Area</label>
+                <input
+                  type="text"
+                  value={editData?.other_area || ''}
+                  onChange={(e) => handleEditChange('other_area', e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
 

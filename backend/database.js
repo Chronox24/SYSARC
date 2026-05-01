@@ -58,7 +58,47 @@ const pool = mysql.createPool({
         relationship VARCHAR(50),
         signature_file LONGBLOB,
         photo LONGBLOB,
+        id_photo LONGBLOB,
+        is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+        area VARCHAR(255),
+        other_area VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS profile_update_requests (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        full_name VARCHAR(255),
+        nickname VARCHAR(255),
+        gender VARCHAR(50),
+        age INT,
+        date_of_birth VARCHAR(255),
+        religion VARCHAR(255),
+        civil_status VARCHAR(50),
+        barangay VARCHAR(255),
+        city_municipality VARCHAR(255),
+        home_address TEXT,
+        mobile_phone VARCHAR(20),
+        post_grad_course VARCHAR(255),
+        post_grad_year VARCHAR(4),
+        college_course VARCHAR(255),
+        college_year VARCHAR(4),
+        high_school VARCHAR(255),
+        high_school_year VARCHAR(4),
+        elementary VARCHAR(255),
+        elementary_year VARCHAR(4),
+        other_education VARCHAR(255),
+        other_year VARCHAR(4),
+        emergency_name VARCHAR(255),
+        emergency_phone VARCHAR(20),
+        relationship VARCHAR(50),
+        photo LONGBLOB,
+        id_photo LONGBLOB,
+        status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES residents(id)
       )
     `);
 
@@ -98,6 +138,35 @@ const pool = mysql.createPool({
             FOREIGN KEY (user_id) REFERENCES residents(id)
         )
     `);
+
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS id_photo LONGBLOB;`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending';`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS nickname VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS religion VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS civil_status VARCHAR(50);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS barangay VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS city_municipality VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS home_address TEXT;`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(20);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS post_grad_course VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS post_grad_year VARCHAR(4);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS college_course VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS college_year VARCHAR(4);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS high_school VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS high_school_year VARCHAR(4);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS elementary VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS elementary_year VARCHAR(4);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_education VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_year VARCHAR(4);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS emergency_name VARCHAR(255);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS emergency_phone VARCHAR(20);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS relationship VARCHAR(50);`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS signature_file LONGBLOB;`);
+    
+    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
+    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
     
     console.log("✓ Database tables created/verified!");
     connection.release();
@@ -108,19 +177,20 @@ const pool = mysql.createPool({
 
 // --- AUTH ROUTES ---
 
-app.post("/api/register", upload.single('photo'), async (req, res) => {
+app.post("/api/register", upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'idPhoto', maxCount: 1 }, { name: 'id_photo', maxCount: 1 }]), async (req, res) => {
     try {
-        const { FullName, Nickname, EmailAddress, Password, DateofBirth, Gender, Age, Religion, CivilStatus, Barangay, 'City/Municipality': CityMunicipality, HomeAddress, MobilePhone, 'Post Graduate Degree/course': PostGraduateCourse, PostGraduateYear, CollegeDegree, CollegeYear, HighSchool, HighSchoolYear, Elementary, ElementaryYear, Others: OtherEducation, OthersYear: OtherYear, EmergencyContactName, EmergencyContactRelation: EmergencyRelation, EmergencyContactPhone: EmergencyPhone } = req.body;
+        const { FullName, Nickname, EmailAddress, Password, DateofBirth, Gender, Age, Religion, CivilStatus, Barangay, 'City/Municipality': CityMunicipality, HomeAddress, MobilePhone, 'Post Graduate Degree/course': PostGraduateCourse, PostGraduateYear, CollegeDegree, CollegeYear, HighSchool, HighSchoolYear, Elementary, ElementaryYear, Others: OtherEducation, OthersYear: OtherYear, EmergencyContactName, EmergencyContactRelation: EmergencyRelation, EmergencyContactPhone: EmergencyPhone, Area, OtherArea } = req.body;
         if (!FullName || !EmailAddress || !Password) return res.status(400).json({ message: "Missing required fields" });
         const hashedPassword = await bcrypt.hash(Password, 10);
-        const photoData = req.file ? req.file.buffer : null;
+        const photoData = req.files?.photo?.[0]?.buffer || null;
+        const idPhotoData = req.files?.idPhoto?.[0]?.buffer || req.files?.id_photo?.[0]?.buffer || null;
         const connection = await pool.getConnection();
         try {
             const result = await connection.execute(
-                `INSERT INTO residents (full_name, nickname, email, password, date_of_birth, age, gender, religion, civil_status, barangay, city_municipality, home_address, mobile_phone, post_grad_course, post_grad_year, college_course, college_year, high_school, high_school_year, elementary, elementary_year, other_education, other_year, emergency_name, emergency_phone, relationship, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [FullName, Nickname || null, EmailAddress, hashedPassword, DateofBirth || null, Age || null, Gender || null, Religion || null, CivilStatus || null, Barangay || null, CityMunicipality || null, HomeAddress || null, MobilePhone || null, PostGraduateCourse || null, PostGraduateYear || null, CollegeDegree || null, CollegeYear || null, HighSchool || null, HighSchoolYear || null, Elementary || null, ElementaryYear || null, OtherEducation || null, OtherYear || null, EmergencyContactName || null, EmergencyPhone || null, EmergencyRelation || null, photoData]
+                `INSERT INTO residents (full_name, nickname, email, password, date_of_birth, age, gender, religion, civil_status, barangay, city_municipality, home_address, mobile_phone, post_grad_course, post_grad_year, college_course, college_year, high_school, high_school_year, elementary, elementary_year, other_education, other_year, emergency_name, emergency_phone, relationship, photo, id_photo, is_verified, area, other_area) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)`,
+                [FullName, Nickname || null, EmailAddress, hashedPassword, DateofBirth || null, Age || null, Gender || null, Religion || null, CivilStatus || null, Barangay || null, CityMunicipality || null, HomeAddress || null, MobilePhone || null, PostGraduateCourse || null, PostGraduateYear || null, CollegeDegree || null, CollegeYear || null, HighSchool || null, HighSchoolYear || null, Elementary || null, ElementaryYear || null, OtherEducation || null, OtherYear || null, EmergencyContactName || null, EmergencyPhone || null, EmergencyRelation || null, photoData, idPhotoData, Area || null, OtherArea || null]
             );
-            res.json({ message: "Registered", userId: result[0].insertId });
+            res.json({ message: "Registration submitted for admin verification. You will receive an email once approved.", userId: result[0].insertId });
         } catch (err) {
             if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ message: "Email already exists" });
             res.status(500).json({ message: "Registration failed: " + err.message });
@@ -136,6 +206,8 @@ app.post("/api/login", async (req, res) => {
             const [rows] = await connection.execute("SELECT * FROM residents WHERE email = ?", [email]);
             if (rows.length === 0) return res.status(401).json({ message: "User not found" });
             const user = rows[0];
+            if (user.is_verified === 'Pending') return res.status(403).json({ message: "Your account is pending admin approval. Please wait for confirmation." });
+            if (user.is_verified === 'Rejected') return res.status(403).json({ message: "Your account has been rejected. Please contact the administrator." });
             const match = await bcrypt.compare(password, user.password);
             if (!match) return res.status(401).json({ message: "Wrong password" });
             res.json({ user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null } });
@@ -169,25 +241,83 @@ app.get("/api/user/:userId", async (req, res) => {
             if (rows.length === 0) return res.status(404).json({ message: "User not found" });
             const user = rows[0];
             if (user.photo) user.photo = `data:image/jpeg;base64,${user.photo.toString('base64')}`;
+            if (user.id_photo) user.id_photo = `data:image/jpeg;base64,${user.id_photo.toString('base64')}`;
             res.json(user);
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-app.put("/api/user/:userId", upload.single('photo'), async (req, res) => {
+app.put("/api/user/:userId", upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'id_photo', maxCount: 1 }]), async (req, res) => {
     try {
         const { userId } = req.params;
         const { full_name, nickname, gender, age, date_of_birth, religion, civil_status, barangay, city_municipality, home_address, mobile_phone, post_grad_course, post_grad_year, college_course, college_year, high_school, high_school_year, elementary, elementary_year, other_education, other_year, emergency_name, emergency_phone, relationship } = req.body;
-        const photoData = req.file ? req.file.buffer : null;
+        const photoData = req.files?.photo?.[0]?.buffer || null;
+        const idPhotoData = req.files?.id_photo?.[0]?.buffer || null;
         const connection = await pool.getConnection();
         try {
+            // Create a pending update request instead of updating directly
+            const [result] = await connection.execute(
+                `INSERT INTO profile_update_requests (user_id, full_name, nickname, gender, age, date_of_birth, religion, civil_status, barangay, city_municipality, home_address, mobile_phone, post_grad_course, post_grad_year, college_course, college_year, high_school, high_school_year, elementary, elementary_year, other_education, other_year, emergency_name, emergency_phone, relationship, photo, id_photo, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')`,
+                [userId, full_name || null, nickname || null, gender || null, (age !== undefined && age !== '') ? age : null, (date_of_birth !== undefined && date_of_birth !== '') ? date_of_birth : null, religion || null, civil_status || null, barangay || null, city_municipality || null, home_address || null, mobile_phone || null, post_grad_course || null, post_grad_year || null, college_course || null, college_year || null, high_school || null, high_school_year || null, elementary || null, elementary_year || null, other_education || null, other_year || null, emergency_name || null, emergency_phone || null, relationship || null, photoData, idPhotoData]
+            );
+            res.json({ message: "Update request submitted for admin approval", requestId: result.insertId });
+        } catch (err) { res.status(500).json({ message: "Request submission failed: " + err.message });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- ADMIN PROFILE UPDATE MANAGEMENT ---
+
+app.get("/api/admin/pending-updates", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute(
+                "SELECT pur.*, r.full_name as current_name, r.email as resident_email FROM profile_update_requests pur JOIN residents r ON pur.user_id = r.id WHERE pur.status = 'Pending' ORDER BY pur.created_at ASC"
+            );
+            const processedRows = rows.map(row => {
+              if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`;
+              if (row.id_photo) row.id_photo = `data:image/jpeg;base64,${row.id_photo.toString('base64')}`;
+              if (row.signature_file) row.signature_file = `data:image/jpeg;base64,${row.signature_file.toString('base64')}`;
+              return row;
+            });
+            res.json(processedRows || []);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/approve-update/:requestId", async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM profile_update_requests WHERE id = ?", [requestId]);
+            if (rows.length === 0) return res.status(404).json({ message: "Request not found" });
+            const update = rows[0];
+            
+            // Update the resident's profile
             let query = `UPDATE residents SET full_name=?, nickname=?, gender=?, age=?, date_of_birth=?, religion=?, civil_status=?, barangay=?, city_municipality=?, home_address=?, mobile_phone=?, post_grad_course=?, post_grad_year=?, college_course=?, college_year=?, high_school=?, high_school_year=?, elementary=?, elementary_year=?, other_education=?, other_year=?, emergency_name=?, emergency_phone=?, relationship=?`;
-            const params = [full_name || null, nickname || null, gender || null, (age !== undefined && age !== '') ? age : null, (date_of_birth !== undefined && date_of_birth !== '') ? date_of_birth : null, religion || null, civil_status || null, barangay || null, city_municipality || null, home_address || null, mobile_phone || null, post_grad_course || null, post_grad_year || null, college_course || null, college_year || null, high_school || null, high_school_year || null, elementary || null, elementary_year || null, other_education || null, other_year || null, emergency_name || null, emergency_phone || null, relationship || null];
-            if (photoData) { query += `, photo=?`; params.push(photoData); }
-            query += ` WHERE id=?`; params.push(userId);
+            const params = [update.full_name, update.nickname, update.gender, update.age, update.date_of_birth, update.religion, update.civil_status, update.barangay, update.city_municipality, update.home_address, update.mobile_phone, update.post_grad_course, update.post_grad_year, update.college_course, update.college_year, update.high_school, update.high_school_year, update.elementary, update.elementary_year, update.other_education, update.other_year, update.emergency_name, update.emergency_phone, update.relationship];
+            
+            if (update.photo) { query += `, photo=?`; params.push(update.photo); }
+            if (update.id_photo) { query += `, id_photo=?`; params.push(update.id_photo); }
+            query += ` WHERE id=?`; params.push(update.user_id);
+            
             await connection.execute(query, params);
-            res.json({ message: "Profile updated successfully" });
-        } catch (err) { res.status(500).json({ message: "Database update failed: " + err.message });
+            await connection.execute("UPDATE profile_update_requests SET status = 'Approved' WHERE id = ?", [requestId]);
+            
+            res.json({ message: "Update approved and applied" });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/reject-update/:requestId", async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE profile_update_requests SET status = 'Rejected' WHERE id = ?", [requestId]);
+            res.json({ message: "Update request rejected" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -222,9 +352,57 @@ app.get("/api/all-accounts", async (req, res) => {
     try {
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute("SELECT id, full_name, email, gender, age, date_of_birth, photo, created_at FROM residents ORDER BY created_at DESC");
-            const processedRows = rows.map(row => { if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`; return row; });
+            const [rows] = await connection.execute("SELECT * FROM residents WHERE is_verified = 'Approved' ORDER BY created_at DESC");
+            const processedRows = rows.map(row => {
+              if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`;
+              if (row.id_photo) row.id_photo = `data:image/jpeg;base64,${row.id_photo.toString('base64')}`;
+              if (row.signature_file) row.signature_file = `data:image/jpeg;base64,${row.signature_file.toString('base64')}`;
+              return row;
+            });
             res.json(processedRows || []);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- ADMIN REGISTRATION VERIFICATION ---
+
+app.get("/api/admin/pending-registrations", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute(
+                "SELECT * FROM residents WHERE is_verified = 'Pending' ORDER BY created_at ASC"
+            );
+            const processedRows = rows.map(row => {
+              if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`;
+              if (row.id_photo) row.id_photo = `data:image/jpeg;base64,${row.id_photo.toString('base64')}`;
+              if (row.signature_file) row.signature_file = `data:image/jpeg;base64,${row.signature_file.toString('base64')}`;
+              return row;
+            });
+            res.json(processedRows || []);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/verify-resident/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET is_verified = 'Approved' WHERE id = ?", [userId]);
+            res.json({ message: "Resident approved successfully" });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/reject-resident/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { reason } = req.body;
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET is_verified = 'Rejected' WHERE id = ?", [userId]);
+            res.json({ message: "Resident rejected", reason: reason || "No reason provided" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -281,6 +459,47 @@ app.delete("/api/admin/remove-photo/:userId", async (req, res) => {
             res.json({ message: "Photo removed successfully" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete("/api/admin/delete-resident/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) return res.status(400).json({ message: "User ID is required" });
+        
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            
+            // Temporarily disable foreign key checks to ensure clean deletion
+            await connection.execute("SET FOREIGN_KEY_CHECKS = 0");
+            
+            // Delete related records
+            await connection.execute("DELETE FROM messages WHERE user_id = ?", [userId]);
+            await connection.execute("DELETE FROM certificate_requests WHERE user_id = ?", [userId]);
+            await connection.execute("DELETE FROM profile_update_requests WHERE user_id = ?", [userId]);
+            
+            // Finally delete the resident
+            const [result] = await connection.execute("DELETE FROM residents WHERE id = ?", [userId]);
+            
+            // Re-enable foreign key checks
+            await connection.execute("SET FOREIGN_KEY_CHECKS = 1");
+            
+            if (result.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(404).json({ message: "Resident not found" });
+            }
+            
+            await connection.commit();
+            res.json({ message: "Resident account and all related data deleted successfully" });
+        } catch (err) {
+            await connection.execute("SET FOREIGN_KEY_CHECKS = 1");
+            await connection.rollback();
+            throw err;
+        } finally { connection.release(); }
+    } catch (err) { 
+        console.error("Delete Error:", err);
+        res.status(500).json({ message: "Server error: " + err.message }); 
+    }
 });
 
 app.get("/api/dashboard-stats", async (req, res) => {

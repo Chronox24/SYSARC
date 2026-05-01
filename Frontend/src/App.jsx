@@ -9,6 +9,7 @@ import AboutUs from "./pages/AboutUs"
 import RequestFormPage from "./pages/RequestFormPage"
 import AdminLoginPage from "./pages/AdminLoginPage"
 import AdminDashboardPage from "./pages/AdminDashboardPage"
+import ProtectedAdminRoute from "./components/ProtectedAdminRoute"
 
 function AppContent() {
   const location = useLocation();
@@ -16,7 +17,7 @@ function AppContent() {
 
   return (
     <>
-      {!isAdminPage && <Navbar />}   
+      {!isAdminPage && <Navbar />}
       
       <Routes>
         <Route path="/" element={<AboutUs />} />
@@ -29,7 +30,14 @@ function AppContent() {
         <Route path="/about" element={<Navigate to="/" replace />} />
         <Route path="/request" element={<RequestFormPage />} />
         <Route path="/admin-login" element={<AdminLoginPage />} />
-        <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
+        <Route 
+          path="/admin-dashboard" 
+          element={
+            <ProtectedAdminRoute>
+              <AdminDashboardPage />
+            </ProtectedAdminRoute>
+          } 
+        />
       </Routes>
     </>
   )

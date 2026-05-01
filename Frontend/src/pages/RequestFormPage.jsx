@@ -104,6 +104,8 @@ export default function RequestFormPage() {
               <option value="Certificate of Indigency">Certificate of Indigency</option>
               <option value="Barangay ID">Barangay ID</option>
               <option value="First Time Job Seeker">First Time Job Seeker</option>
+              <option value="Good moral for education">Good moral for education</option>
+              <option value="Good moral for AFP/PNP">Good moral for AFP/PNP</option>
             </select>
           </div>
 

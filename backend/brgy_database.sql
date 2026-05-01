@@ -57,6 +57,8 @@ CREATE TABLE `residents` (
   `relationship` varchar(50) DEFAULT NULL,
   `signature_file` longblob DEFAULT NULL,
   `photo` longblob DEFAULT NULL,
+  `id_photo` longblob DEFAULT NULL,
+  `is_verified` enum('Pending','Approved','Rejected') DEFAULT 'Pending',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
