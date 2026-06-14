@@ -140,7 +140,7 @@ const handleRegister = async (e) => {
     }
 
     console.log("📝 Sending registration request...")
-    const response = await fetch('http://127.0.0.1:5000/api/register', {
+    const response = await fetch('/api/register', {
       method: 'POST',
       body: formDataWithPhoto
     })
@@ -170,7 +170,8 @@ const handleRegister = async (e) => {
     setIdPhotoFile(null)
     setTimeout(() => navigate('/'), 3000)
   } catch (err) {
-    setError('Registration failed. Please check if the server is running.')
+    console.error('Registration error:', err)
+    setError(err?.message || 'Registration failed. Please check if the server is running.')
   } finally {
     setLoading(false)
   }

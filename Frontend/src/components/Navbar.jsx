@@ -4,9 +4,14 @@ import "../styles/Navbar.css"
 
 export default function Navbar() {
   const [user, setUser] = useState(null)
+  const [theme, setTheme] = useState('light')
   const navigate = useNavigate()
 
   useEffect(() => {
+    const storedTheme = localStorage.getItem('theme') || 'light'
+    setTheme(storedTheme)
+    document.documentElement.dataset.theme = storedTheme
+
     const checkUser = () => {
       const storedUser = localStorage.getItem("currentUser")
       if (storedUser) {
@@ -30,6 +35,13 @@ export default function Navbar() {
     }
   }, [])
 
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(nextTheme)
+    document.documentElement.dataset.theme = nextTheme
+    localStorage.setItem('theme', nextTheme)
+  }
+
   const handleLogout = () => {
     localStorage.removeItem("currentUser")
     setUser(null)
@@ -50,6 +62,9 @@ export default function Navbar() {
       </nav>
 
       <div className="navbar-right">
+        <button className="theme-toggle-btn nav-theme-btn" onClick={toggleTheme}>
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
         {!user ? (
           <>
             <Link className="nav-btn-outline" to="/login">Sign in</Link>

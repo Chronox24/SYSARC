@@ -67,9 +67,27 @@ export default function ProfilePage() {
     }
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   const fetchUserDetails = async (userId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/user/${userId}`)
+      const response = await fetch(`/api/user/${userId}`)
       const data = await response.json()
       if (response.ok) {
         setUser(prev => ({ ...prev, ...data }))
@@ -82,7 +100,7 @@ export default function ProfilePage() {
         }
       }
       
-      const requestsResponse = await fetch(`http://127.0.0.1:5000/api/dashboard/${userId}`)
+      const requestsResponse = await fetch(`/api/dashboard/${userId}`)
       const requestsData = await requestsResponse.json()
       setRequests(Array.isArray(requestsData) ? requestsData : [])
       setLoading(false)
@@ -146,7 +164,7 @@ export default function ProfilePage() {
         formData.append('id_photo', idPhotoFile)
       }
 
-      const response = await fetch(`http://127.0.0.1:5000/api/user/${user.id}`, {
+      const response = await fetch(`/api/user/${user.id}`, {
         method: 'PUT',
         body: formData
       })
@@ -255,6 +273,7 @@ export default function ProfilePage() {
           <div className="profile-basic-info">
             <h2>{user?.full_name}</h2>
             <p className="profile-email">{user?.email}</p>
+            <p className="account-created">Joined on {formatDateTime(user?.created_at)}</p>
             {user?.is_verified === 'Approved' ? (
               <span className="profile-verified-badge">✅ Verified</span>
             ) : (
@@ -635,7 +654,7 @@ export default function ProfilePage() {
             <table className="requests-table">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Requested On</th>
                   <th>Certificate Type</th>
                   <th>Status</th>
                   <th>Verification</th>
@@ -644,7 +663,7 @@ export default function ProfilePage() {
               <tbody>
                 {requests.map(req => (
                   <tr key={req.id}>
-                    <td>{new Date(req.request_date).toLocaleDateString()}</td>
+                    <td>{req.request_date ? new Date(req.request_date).toLocaleString() : req.created_at ? new Date(req.created_at).toLocaleString() : '-'}</td>
                     <td>{req.certificate_type}</td>
                     <td>{req.process_status}</td>
                     <td>{req.verification_status}</td>

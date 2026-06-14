@@ -27,7 +27,7 @@ export default function LoginPage() {
         return
       }
 
-      const response = await fetch('http://127.0.0.1:5000/api/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -60,7 +60,8 @@ export default function LoginPage() {
       
       navigate('/dashboard')
     } catch (err) {
-      setError('Login failed. Please check if the server is running.')
+      console.error('Login error:', err)
+      setError(err?.message || 'Login failed. Please check if the server is running.')
     } finally {
       setLoading(false)
     }

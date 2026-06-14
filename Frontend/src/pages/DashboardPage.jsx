@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
   const fetchUserData = async (userId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/user/${userId}`)
+      const response = await fetch(`/api/user/${userId}`)
       const data = await response.json()
       if (response.ok) {
         setUser(prev => ({ ...prev, ...data }))
@@ -62,7 +62,7 @@ export default function DashboardPage() {
 
   const fetchRequests = async (userId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/dashboard/${userId}`)
+      const response = await fetch(`/api/dashboard/${userId}`)
       const data = await response.json()
       setRequests(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -72,7 +72,7 @@ export default function DashboardPage() {
 
   const fetchMessages = async (userId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/messages/${userId}`)
+      const response = await fetch(`/api/messages/${userId}`)
       const data = await response.json()
       setMessages(Array.isArray(data) ? data : [])
       setLoading(false)
@@ -82,13 +82,31 @@ export default function DashboardPage() {
     }
   }
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A'
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return dateString
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
+    } catch (err) {
+      return dateString
+    }
+  }
+
   const handleSendMessage = async (e) => {
     e.preventDefault()
     if (!newMessage.trim()) return
 
     setIsSending(true)
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/messages', {
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +134,7 @@ export default function DashboardPage() {
 
   if (!user) {
     return (
-      <div style={{ padding: '100px', textAlign: 'center', background: 'white', minHeight: '100vh' }}>
+      <div style={{ padding: '100px', textAlign: 'center', background: 'var(--surface)', minHeight: '100vh' }}>
         <h2>Loading your dashboard data...</h2>
         <p>If this takes too long, please try logging in again.</p>
         <button onClick={() => navigate('/login')} style={{ marginTop: '20px', padding: '10px 20px' }}>Go to Login</button>
@@ -133,7 +151,7 @@ export default function DashboardPage() {
               {user.photo ? (
                 <img src={user.photo} alt="Profile" className="profile-main-img" />
               ) : (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#94a3b8', fontSize: '3rem' }}>👤</div>
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-muted)', color: 'var(--text-secondary)', fontSize: '3rem' }}>👤</div>
               )}
             </div>
             
@@ -153,6 +171,10 @@ export default function DashboardPage() {
               <li>
                 <strong>Email Address</strong>
                 <span>{user.email}</span>
+              </li>
+              <li>
+                <strong>Account Created</strong>
+                <span>{formatDateTime(user.created_at)}</span>
               </li>
               <li>
                 <strong>Last Login</strong>
@@ -176,7 +198,7 @@ export default function DashboardPage() {
               <table className="requests-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Requested On</th>
                     <th>Type</th>
                     <th>Status</th>
                     <th>Verification</th>
@@ -185,7 +207,7 @@ export default function DashboardPage() {
                 <tbody>
                   {requests.map(req => (
                     <tr key={req.id}>
-                      <td>{req.request_date ? new Date(req.request_date).toLocaleDateString() : '-'}</td>
+                      <td>{req.request_date ? new Date(req.request_date).toLocaleString() : req.created_at ? new Date(req.created_at).toLocaleString() : '-'}</td>
                       <td className="certificate-type">{req.certificate_type}</td>
                       <td>
                         <span className={`status-badge ${req.process_status === 'Claimed' ? 'status-verified' : 'status-pending'}`}>

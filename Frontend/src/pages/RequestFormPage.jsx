@@ -47,7 +47,7 @@ export default function RequestFormPage() {
         return
       }
 
-      const response = await fetch("http://127.0.0.1:5000/api/request-certificate", {
+      const response = await fetch('/api/request-certificate', {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

@@ -7,10 +7,17 @@ const multer = require("multer");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const upload = multer({ storage: multer.memoryStorage() });
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Backend is running' });
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 } // limit files to 2MB each
+});
 
 const pool = mysql.createPool({
   host: 'localhost',
@@ -26,6 +33,13 @@ const pool = mysql.createPool({
   try {
     const connection = await pool.getConnection();
     console.log("✓ MySQL database connected successfully!");
+
+    try {
+      await connection.query("SET GLOBAL max_allowed_packet = 67108864");
+      console.log("✓ Global max_allowed_packet set to 64MB");
+    } catch (packetErr) {
+      console.warn("⚠️ Could not set max_allowed_packet:", packetErr.message);
+    }
     
     await connection.query(`
       CREATE TABLE IF NOT EXISTS residents (
@@ -60,6 +74,8 @@ const pool = mysql.createPool({
         photo LONGBLOB,
         id_photo LONGBLOB,
         is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+        is_archived ENUM('No', 'Yes') DEFAULT 'No',
+        archived_at DATETIME DEFAULT NULL,
         area VARCHAR(255),
         other_area VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -169,6 +185,31 @@ const pool = mysql.createPool({
     await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
     
     console.log("✓ Database tables created/verified!");
+
+    const adminEmail = 'sysarch.admin@local';
+    const adminPassword = 'Admin@2026!';
+    const legacyAdminEmail = 'admin@brgy830.com';
+    const [adminRows] = await connection.execute("SELECT id FROM admins WHERE email = ?", [adminEmail]);
+    if (adminRows.length === 0) {
+      const [legacyRows] = await connection.execute("SELECT id FROM admins WHERE email = ?", [legacyAdminEmail]);
+      const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+      if (legacyRows.length > 0) {
+        await connection.execute(
+          "UPDATE admins SET email = ?, name = ?, role = ?, password = ? WHERE id = ?",
+          [adminEmail, 'SYSARCH Admin', 'Administrator', hashedAdminPassword, legacyRows[0].id]
+        );
+        console.log(`✓ Legacy admin migrated to ${adminEmail}`);
+      } else {
+        await connection.execute(
+          "INSERT INTO admins (name, role, email, password) VALUES (?, ?, ?, ?)",
+          ['SYSARCH Admin', 'Administrator', adminEmail, hashedAdminPassword]
+        );
+        console.log(`✓ Default admin created: ${adminEmail} / ${adminPassword}`);
+      }
+    } else {
+      console.log(`✓ Admin account already exists: ${adminEmail}`);
+    }
+
     connection.release();
   } catch (err) {
     console.error("✗ Database initialization error:", err.message);
@@ -201,6 +242,7 @@ app.post("/api/register", upload.fields([{ name: 'photo', maxCount: 1 }, { name:
 app.post("/api/login", async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log(`[LOGIN] attempt for email=${email}`);
         const connection = await pool.getConnection();
         try {
             const [rows] = await connection.execute("SELECT * FROM residents WHERE email = ?", [email]);
@@ -208,7 +250,16 @@ app.post("/api/login", async (req, res) => {
             const user = rows[0];
             if (user.is_verified === 'Pending') return res.status(403).json({ message: "Your account is pending admin approval. Please wait for confirmation." });
             if (user.is_verified === 'Rejected') return res.status(403).json({ message: "Your account has been rejected. Please contact the administrator." });
-            const match = await bcrypt.compare(password, user.password);
+            let match = await bcrypt.compare(password, user.password);
+            if (!match && password === user.password) {
+              match = true;
+              try {
+                const newHash = await bcrypt.hash(password, 10);
+                await connection.execute("UPDATE residents SET password = ? WHERE id = ?", [newHash, user.id]);
+              } catch (migrationErr) {
+                console.warn('Could not migrate resident password hash:', migrationErr.message);
+              }
+            }
             if (!match) return res.status(401).json({ message: "Wrong password" });
             res.json({ user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null } });
         } finally { connection.release(); }
@@ -223,7 +274,16 @@ app.post("/api/admin/login", async (req, res) => {
             const [rows] = await connection.execute("SELECT * FROM admins WHERE email = ?", [email]);
             if (rows.length === 0) return res.status(401).json({ message: "Admin not found" });
             const admin = rows[0];
-            const match = await bcrypt.compare(password, admin.password);
+            let match = await bcrypt.compare(password, admin.password);
+            if (!match && password === admin.password) {
+              match = true;
+              try {
+                const newHash = await bcrypt.hash(password, 10);
+                await connection.execute("UPDATE admins SET password = ? WHERE id = ?", [newHash, admin.id]);
+              } catch (migrationErr) {
+                console.warn('Could not migrate admin password hash:', migrationErr.message);
+              }
+            }
             if (!match) return res.status(401).json({ message: "Wrong password" });
             res.json({ admin: { id: admin.id, name: admin.name, role: admin.role, email: admin.email } });
         } finally { connection.release(); }
@@ -352,7 +412,7 @@ app.get("/api/all-accounts", async (req, res) => {
     try {
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute("SELECT * FROM residents WHERE is_verified = 'Approved' ORDER BY created_at DESC");
+            const [rows] = await connection.execute("SELECT * FROM residents WHERE is_verified = 'Approved' AND is_archived = 'No' ORDER BY created_at DESC");
             const processedRows = rows.map(row => {
               if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`;
               if (row.id_photo) row.id_photo = `data:image/jpeg;base64,${row.id_photo.toString('base64')}`;
@@ -360,6 +420,39 @@ app.get("/api/all-accounts", async (req, res) => {
               return row;
             });
             res.json(processedRows || []);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.get("/api/admin/archived-residents", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM residents WHERE is_archived = 'Yes' ORDER BY archived_at DESC");
+            const processedRows = rows.map(row => {
+              if (row.photo) row.photo = `data:image/jpeg;base64,${row.photo.toString('base64')}`;
+              if (row.id_photo) row.id_photo = `data:image/jpeg;base64,${row.id_photo.toString('base64')}`;
+              if (row.signature_file) row.signature_file = `data:image/jpeg;base64,${row.signature_file.toString('base64')}`;
+              return row;
+            });
+            res.json(processedRows || []);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/archive-resident/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            const [result] = await connection.execute(
+                "UPDATE residents SET is_archived = 'Yes', archived_at = NOW() WHERE id = ?",
+                [userId]
+            );
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: "Resident not found" });
+            }
+            res.json({ message: "Resident account archived successfully" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -405,6 +498,16 @@ app.put("/api/admin/reject-resident/:userId", async (req, res) => {
             res.json({ message: "Resident rejected", reason: reason || "No reason provided" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'Upload failed: one or more files exceed the 2MB limit.' });
+    }
+    return res.status(400).json({ message: 'Upload error: ' + err.message });
+  }
+  next(err);
 });
 
 app.get("/api/all-requests", async (req, res) => {
@@ -573,18 +676,54 @@ app.put('/api/admin/messages/read/:userId', async (req, res) => {
 
 // --- SETUP ---
 
-app.post("/api/admin/setup", async (req, res) => {
+app.post('/api/admin/create', async (req, res) => {
     try {
-        const hashedPassword = await bcrypt.hash("BrgyAdminpassword", 10);
+        const { email, password, name, role } = req.body;
+        if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute("SELECT * FROM admins WHERE email = ?", ["admin@brgy830.com"]);
+            const [existing] = await connection.execute('SELECT id FROM admins WHERE email = ?', [email]);
+            if (existing.length > 0) return res.status(409).json({ message: 'Admin account already exists' });
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await connection.execute('INSERT INTO admins (name, role, email, password) VALUES (?, ?, ?, ?)', [name || 'SYSARCH Admin', role || 'Administrator', email, hashedPassword]);
+            res.json({ message: 'Admin account created successfully', email, password });
+        } finally { connection.release(); }
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.post('/api/admin/reset-password', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) return res.status(400).json({ message: 'Email and new password are required' });
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute('SELECT id FROM admins WHERE email = ?', [email]);
+            if (rows.length === 0) return res.status(404).json({ message: 'Admin not found' });
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await connection.execute('UPDATE admins SET password = ? WHERE email = ?', [hashedPassword, email]);
+            res.json({ message: 'Admin password reset successfully', email });
+        } finally { connection.release(); }
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.post("/api/admin/setup", async (req, res) => {
+    try {
+        const adminEmail = 'sysarch.admin@local';
+        const adminPassword = 'Admin@2026!';
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM admins WHERE email = ?", [adminEmail]);
             if (rows.length > 0) return res.json({ message: "Admin account already exists" });
-            await connection.execute("INSERT INTO admins (name, role, email, password) VALUES (?, ?, ?, ?)", ["Brgy830Admin", "Administrator", "admin@brgy830.com", hashedPassword]);
-            res.json({ message: "Admin account created successfully" });
+            await connection.execute("INSERT INTO admins (name, role, email, password) VALUES (?, ?, ?, ?)", ['SYSARCH Admin', 'Administrator', adminEmail, hashedPassword]);
+            res.json({ message: "Admin account created successfully", email: adminEmail, password: adminPassword });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-const PORT = 5000;
-app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => console.log(`✓ Server running on port ${PORT} and bound to 0.0.0.0`));

@@ -1,31 +1,20 @@
-:root {
-  --bg-dashboard: #f8fafc;
-  --card-dashboard: #ffffff;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --accent-indigo: #4f46e5;
-  --border-light: #e2e8f0;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-}
 
 .dashboard-container {
   min-height: 100vh;
-  background-image: linear-gradient(rgba(55, 65, 81, 0.8), rgba(55, 65, 81, 0.8)), url('/street_brgy.png');
+  background-image: linear-gradient(var(--overlay), var(--overlay)), url('/street_brgy.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
   font-family: 'Inter', -apple-system, sans-serif;
-  color: var(--text-primary);
+  color: var(--text);
   position: relative;
   z-index: 1;
   padding: 40px 20px;
 }
 
 .navbar {
-  background: white;
-  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   padding: 1rem 0;
   position: sticky;
   top: 0;
@@ -42,7 +31,7 @@
 }
 
 .navbar-title {
-  color: var(--text-primary);
+  color: var(--text);
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
@@ -66,14 +55,14 @@
 }
 
 .nav-link-btn:hover {
-  color: var(--accent-indigo);
+  color: var(--accent);
 }
 
 .logout-button {
   padding: 0.5rem 1.25rem;
-  background: white;
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -82,8 +71,8 @@
 }
 
 .logout-button:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--surface-muted);
+  border-color: var(--border);
 }
 
 .dashboard-content {
@@ -96,11 +85,11 @@
 }
 
 .welcome-card {
-  background: white;
+  background: var(--surface);
   border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
   padding: 50px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   text-align: center;
   margin-bottom: 40px;
 }
@@ -118,9 +107,9 @@
   height: 180px;
   border-radius: 50%;
   overflow: hidden;
-  border: 6px solid white;
+  border: 6px solid var(--border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-  background: #f1f5f9;
+  background: var(--surface-muted);
   margin-bottom: 10px;
 }
 
@@ -133,14 +122,14 @@
 .welcome-title {
   margin: 0;
   font-size: 3rem;
-  color: #1e293b;
+  color: var(--text);
   font-weight: 800;
   letter-spacing: -1px;
 }
 
 .welcome-subtitle {
   margin: 10px 0 0 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 1.25rem;
   font-weight: 500;
 }
@@ -148,7 +137,7 @@
 .user-info {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid var(--border);
 }
 
 .user-info.clickable {
@@ -157,7 +146,7 @@
 }
 
 .user-info.clickable:hover {
-  background: #f8fafc;
+  background: var(--surface-muted);
   margin: 2rem -1rem -1rem -1rem;
   padding: 2rem 1rem 1rem 1rem;
   border-radius: 0.75rem;
@@ -170,7 +159,7 @@
   margin-bottom: 1.5rem;
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--accent-indigo);
+  color: var(--text);
 }
 
 .user-info ul {
@@ -196,42 +185,42 @@
 }
 
 .user-info li span {
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 600;
 }
 
 .requests-section {
-  background: white;
+  background: var(--surface);
   border-radius: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow);
   padding: 40px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border);
 }
 
 .requests-section h2 {
   font-size: 1.75rem;
   font-weight: 800;
   margin: 0 0 25px 0;
-  color: #1e293b;
+  color: var(--text);
   letter-spacing: -0.5px;
 }
 
 .empty-requests {
   text-align: center;
   padding: 40px 20px;
-  background: #f8fafc;
+  background: var(--surface);
   border-radius: 16px;
-  border: 2px dashed #e2e8f0;
+  border: 2px dashed var(--border);
 }
 
 .empty-requests p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 20px;
   font-size: 1.1rem;
 }
 
 .btn-request {
-  background: #4f46e5;
+  background: var(--accent);
   color: white;
   border: none;
   padding: 12px 28px;
@@ -243,7 +232,7 @@
 }
 
 .btn-request:hover {
-  background: #4338ca;
+  background: var(--accent-strong);
   transform: translateY(-2px);
   box-shadow: 0 6px 15px rgba(79, 70, 229, 0.4);
 }
@@ -262,7 +251,7 @@
 .requests-table th {
   padding: 15px 20px;
   text-align: left;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.875rem;
   text-transform: uppercase;
@@ -271,26 +260,26 @@
 
 .requests-table td {
   padding: 20px;
-  background: #f8fafc;
-  border-top: 1px solid #f1f5f9;
-  border-bottom: 1px solid #f1f5f9;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .requests-table td:first-child {
-  border-left: 1px solid #f1f5f9;
+  border-left: 1px solid var(--border);
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
 }
 
 .requests-table td:last-child {
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid var(--border);
   border-top-right-radius: 12px;
   border-bottom-right-radius: 12px;
 }
 
 .certificate-type {
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text);
 }
 
 .status-badge {
@@ -321,7 +310,7 @@
 }
 
 .chat-toggle {
-  background: #4f46e5;
+  background: var(--accent);
   color: white;
   border: none;
   padding: 16px 30px;
@@ -339,7 +328,7 @@
 .chat-toggle:hover {
   transform: translateY(-5px) scale(1.02);
   box-shadow: 0 15px 35px rgba(79, 70, 229, 0.5);
-  background: #4338ca;
+  background: var(--accent-strong);
 }
 
 .chat-window {
@@ -348,7 +337,7 @@
   right: 0;
   width: 380px;
   height: 550px;
-  background: white;
+  background: var(--surface);
   border-radius: 24px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   display: flex;
@@ -456,7 +445,7 @@
 }
 
 .chat-input-area button:hover:not(:disabled) {
-  background: #4338ca;
+  background: var(--accent-strong);
 }
 
 .chat-input-area button:disabled {
@@ -477,18 +466,18 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border-light);
-  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .requests-table td {
   padding: 1rem;
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border);
   font-size: 0.9375rem;
 }
 
 .requests-table tr:hover {
-  background: #fcfcfd;
+  background: var(--surface-muted);
 }
 
 /* Status Badges */

@@ -46,6 +46,12 @@
   padding: 8px 10px;
   border-radius: 6px;
   font-family: inherit;
+  color: #000;
+}
+
+.card select option {
+  color: #000;
+  background: #ffffff;
 }
 
 .card table {

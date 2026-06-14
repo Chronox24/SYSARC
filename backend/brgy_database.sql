@@ -59,6 +59,8 @@ CREATE TABLE `residents` (
   `photo` longblob DEFAULT NULL,
   `id_photo` longblob DEFAULT NULL,
   `is_verified` enum('Pending','Approved','Rejected') DEFAULT 'Pending',
+  `is_archived` enum('No','Yes') DEFAULT 'No',
+  `archived_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)

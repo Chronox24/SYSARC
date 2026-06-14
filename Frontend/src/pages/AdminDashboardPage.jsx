@@ -15,6 +15,7 @@ export default function AdminDashboardPage() {
   const [selectedResident, setSelectedResident] = useState(null)
   const [pendingRegistrations, setPendingRegistrations] = useState([])
   const [pendingUpdates, setPendingUpdates] = useState([])
+  const [archivedAccounts, setArchivedAccounts] = useState([])
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [editorContent, setEditorContent] = useState('')
   const [editorVerification, setEditorVerification] = useState('Not Verified')
@@ -24,6 +25,7 @@ export default function AdminDashboardPage() {
   const [conversations, setConversations] = useState([])
   const [selectedChatResident, setSelectedChatResident] = useState(null)
   const [replyText, setReplyText] = useState('')
+  const [theme, setTheme] = useState('light')
 
   const messagesEndRef = React.useRef(null)
 
@@ -36,6 +38,10 @@ export default function AdminDashboardPage() {
   }, [messages])
 
   useEffect(() => {
+    const storedTheme = localStorage.getItem('theme') || 'light'
+    setTheme(storedTheme)
+    document.documentElement.dataset.theme = storedTheme
+
     const adminUser = localStorage.getItem('adminUser')
     if (!adminUser) {
       navigate('/admin-login')
@@ -50,12 +56,20 @@ export default function AdminDashboardPage() {
     }
   }, [navigate])
 
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(nextTheme)
+    document.documentElement.dataset.theme = nextTheme
+    localStorage.setItem('theme', nextTheme)
+  }
+
   useEffect(() => {
     if (activeTab === 'requests') fetchRequests()
     if (activeTab === 'residents') fetchAccounts()
     if (activeTab === 'chat') fetchConversations()
     if (activeTab === 'pending') fetchPendingRegistrations()
     if (activeTab === 'updates') fetchPendingUpdates()
+    if (activeTab === 'archived') fetchArchivedAccounts()
   }, [activeTab])
 
   useEffect(() => {
@@ -74,7 +88,7 @@ export default function AdminDashboardPage() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/admin/conversations')
+      const res = await fetch('/api/admin/conversations')
       const data = await res.json()
       setConversations(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -84,7 +98,7 @@ export default function AdminDashboardPage() {
 
   const fetchMessages = async (userId) => {
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/messages/${userId}`)
+      const res = await fetch(`/api/messages/${userId}`)
       const data = await res.json()
       setMessages(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -95,7 +109,7 @@ export default function AdminDashboardPage() {
   const handleSendMessage = async () => {
     if (!replyText.trim() || !selectedChatResident) return
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/messages', {
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +130,7 @@ export default function AdminDashboardPage() {
 
   const markAsRead = async (userId) => {
     try {
-      await fetch(`http://127.0.0.1:5000/api/admin/messages/read/${userId}`, { method: 'PUT' })
+      await fetch(`/api/admin/messages/read/${userId}`, { method: 'PUT' })
       fetchConversations()
     } catch (err) {
       console.error('Error marking as read:', err)
@@ -145,9 +159,27 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   const fetchAccounts = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/all-accounts')
+      const response = await fetch('/api/all-accounts')
       const data = await response.json()
       setAccounts(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -159,7 +191,7 @@ export default function AdminDashboardPage() {
   const fetchRequests = async () => {
     setRequestLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/all-requests')
+      const res = await fetch('/api/all-requests')
       const data = await res.json()
       setCertificateRequests(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -171,7 +203,7 @@ export default function AdminDashboardPage() {
 
   const fetchPendingRegistrations = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/admin/pending-registrations')
+      const response = await fetch('/api/admin/pending-registrations')
       const data = await response.json()
       setPendingRegistrations(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -181,7 +213,7 @@ export default function AdminDashboardPage() {
 
   const fetchPendingUpdates = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/admin/pending-updates')
+      const response = await fetch('/api/admin/pending-updates')
       const data = await response.json()
       setPendingUpdates(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -192,7 +224,7 @@ export default function AdminDashboardPage() {
   const handleApproveUpdate = async (requestId) => {
     if (!window.confirm('Approve these profile changes?')) return
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/approve-update/${requestId}`, {
+      const response = await fetch(`/api/admin/approve-update/${requestId}`, {
         method: 'PUT'
       })
       if (response.ok) {
@@ -208,7 +240,7 @@ export default function AdminDashboardPage() {
   const handleRejectUpdate = async (requestId) => {
     if (!window.confirm('Reject these profile changes?')) return
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/reject-update/${requestId}`, {
+      const response = await fetch(`/api/admin/reject-update/${requestId}`, {
         method: 'PUT'
       })
       if (response.ok) {
@@ -223,7 +255,7 @@ export default function AdminDashboardPage() {
   const handleApproveResident = async (userId) => {
     if (!window.confirm('Are you sure you want to approve this registration?')) return
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/verify-resident/${userId}`, {
+      const response = await fetch(`/api/admin/verify-resident/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -244,7 +276,7 @@ export default function AdminDashboardPage() {
     const reason = window.prompt('Enter reason for rejection (optional):')
     if (reason === null) return
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/reject-resident/${userId}`, {
+      const response = await fetch(`/api/admin/reject-resident/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason })
@@ -265,6 +297,9 @@ export default function AdminDashboardPage() {
     fetchAccounts();
     fetchRequests();
     fetchConversations();
+    if (activeTab === 'archived') {
+      fetchArchivedAccounts();
+    }
   }
 
   const handleLogout = () => {
@@ -275,7 +310,7 @@ export default function AdminDashboardPage() {
   const handleRemovePhoto = async (userId) => {
     if (!window.confirm('Are you sure you want to remove this photo?')) return;
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/remove-photo/${userId}`, {
+      const response = await fetch(`/api/admin/remove-photo/${userId}`, {
         method: 'DELETE'
       });
       if (response.ok) {
@@ -295,7 +330,7 @@ export default function AdminDashboardPage() {
     formData.append('photo', file);
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/user/${userId}`, {
+      const response = await fetch(`/api/user/${userId}`, {
         method: 'PUT',
         body: formData
       });
@@ -310,28 +345,27 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDeleteResident = async (userId, name) => {
-    if (!window.confirm(`Are you sure you want to PERMANENTLY delete the account for ${name}? This action cannot be undone and will delete all messages and requests associated with this resident.`)) return;
-    
+  const handleArchiveResident = async (userId, name) => {
+    if (!window.confirm(`Are you sure you want to archive the account for ${name}? Archived accounts are preserved and can be reviewed later.`)) return;
+
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/delete-resident/${userId}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/admin/archive-resident/${userId}`, {
+        method: 'PUT'
       });
-      
       const data = await response.json();
-      
+
       if (response.ok) {
-        alert('Resident account deleted successfully');
+        alert('Resident account archived successfully');
         fetchAccounts();
         if (selectedResident && selectedResident.id === userId) {
           closeResidentDetails();
         }
       } else {
-        alert(data.message || 'Failed to delete resident');
+        alert(data.message || 'Failed to archive resident');
       }
     } catch (err) {
-      console.error('Error deleting resident:', err);
-      alert('Error deleting resident: ' + err.message);
+      console.error('Error archiving resident:', err);
+      alert('Error archiving resident: ' + err.message);
     }
   };
 
@@ -365,7 +399,7 @@ export default function AdminDashboardPage() {
     <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
       <div className="loading-spinner"></div>
       <div>Loading Flux Dashboard...</div>
-      <div style={{ fontSize: '12px', opacity: 0.7 }}>Verifying connections to 127.0.0.1:5000</div>
+      <div style={{ fontSize: '12px', opacity: 0.7 }}>Checking API connectivity...</div>
     </div>
   )
   
@@ -381,6 +415,24 @@ export default function AdminDashboardPage() {
     const emailMatch = account?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || false
     return nameMatch || emailMatch
   })
+
+  const filteredArchivedAccounts = (Array.isArray(archivedAccounts) ? archivedAccounts : []).filter(account => {
+    const nameMatch = account?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false
+    const emailMatch = account?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || false
+    return nameMatch || emailMatch
+  })
+
+  const archivedAccountsByPeriod = filteredArchivedAccounts.reduce((groups, account) => {
+    const timestamp = account.archived_at || account.created_at || ''
+    const date = timestamp ? new Date(timestamp) : null
+    const monthYear = date && !isNaN(date.getTime())
+      ? date.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+      : 'Unknown period'
+
+    if (!groups[monthYear]) groups[monthYear] = []
+    groups[monthYear].push(account)
+    return groups
+  }, {})
 
   return (
     <div className="admin-layout">
@@ -408,6 +460,10 @@ export default function AdminDashboardPage() {
           <button className={`nav-item ${activeTab === 'requests' ? 'active' : ''}`} onClick={() => setActiveTab('requests')}>
             <span className="nav-icon">📜</span>
             <span className="nav-label">Requests</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'archived' ? 'active' : ''}`} onClick={() => setActiveTab('archived')}>
+            <span className="nav-icon">🗄️</span>
+            <span className="nav-label">Archived</span>
           </button>
           <button className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
             <span className="nav-icon">💬</span>
@@ -441,6 +497,15 @@ export default function AdminDashboardPage() {
             <button className="logout-flux-btn" onClick={handleLogout}>Sign Out</button>
           </div>
         </header>
+
+        <div className="settings-bar">
+          <div className="settings-bar-item">
+            <span>Theme:</span>
+            <button className="theme-toggle-btn" onClick={toggleTheme}>
+              {theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+            </button>
+          </div>
+        </div>
 
         {/* Welcome Banner */}
         <section className="welcome-banner">
@@ -535,6 +600,7 @@ export default function AdminDashboardPage() {
                     <th>Gender</th>
                     <th>Age</th>
                     <th>Birthday</th>
+                    <th>Joined</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -567,15 +633,16 @@ export default function AdminDashboardPage() {
                       <td>{account.gender || '-'}</td>
                       <td>{account.age || '-'}</td>
                       <td>{formatDate(account.date_of_birth)}</td>
+                      <td>{formatDateTime(account.created_at)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button className="logout-flux-btn" onClick={() => setSelectedChatResident(account) || setActiveTab('chat')}>Message</button>
                           <button 
                             className="logout-flux-btn" 
-                            style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}
-                            onClick={() => handleDeleteResident(account.id, account.full_name)}
+                            style={{ backgroundColor: '#fef3c7', color: '#b45309', borderColor: '#fcd34d' }}
+                            onClick={() => handleArchiveResident(account.id, account.full_name)}
                           >
-                            Delete
+                            Archive
                           </button>
                         </div>
                       </td>
@@ -584,6 +651,62 @@ export default function AdminDashboardPage() {
                 </tbody>
               </table>
             </>
+          )}
+
+          {activeTab === 'archived' && (
+            <div>
+              <h2>🗄️ Archived Residents</h2>
+              {Object.keys(archivedAccountsByPeriod).length > 0 ? (
+                Object.entries(archivedAccountsByPeriod).map(([period, accounts]) => (
+                  <div key={period} className="archived-group">
+                    <h3 style={{ marginTop: '24px', marginBottom: '12px', color: 'var(--text-primary)' }}>{period}</h3>
+                    <table className="flux-table">
+                      <thead>
+                        <tr>
+                          <th>Photo</th>
+                          <th>Full Name</th>
+                          <th>Email</th>
+                          <th>Gender</th>
+                          <th>Age</th>
+                          <th>Birthday</th>
+                          <th>Joined</th>
+                          <th>Archived On</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accounts.map((account) => (
+                          <tr key={account.id}>
+                            <td>
+                              <div className="admin-photo-cell">
+                                <div 
+                                  className="admin-photo-preview clickable"
+                                  onClick={() => account.photo && setSelectedPhoto(account.photo)}
+                                >
+                                  {account.photo ? <img src={account.photo} alt="" /> : <div className="admin-photo-placeholder">None</div>}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <button className="resident-name-button" onClick={() => openResidentDetails(account)}>
+                                {account.full_name}
+                              </button>
+                            </td>
+                            <td>{account.email}</td>
+                            <td>{account.gender || '-'}</td>
+                            <td>{account.age || '-'}</td>
+                            <td>{formatDate(account.date_of_birth)}</td>
+                            <td>{formatDateTime(account.created_at)}</td>
+                            <td>{formatDateTime(account.archived_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              ) : (
+                <p style={{ padding: '18px 0', color: 'var(--text-secondary)' }}>No archived residents found.</p>
+              )}
+            </div>
           )}
 
           {activeTab === 'residentDetail' && selectedResident && (
@@ -596,13 +719,17 @@ export default function AdminDashboardPage() {
                 <div className="resident-detail-actions">
                   <button className="logout-flux-btn" onClick={closeResidentDetails}>← Back to residents</button>
                   <button className="logout-flux-btn" onClick={handleMessageResident}>Message Resident</button>
-                  <button 
-                    className="logout-flux-btn" 
-                    style={{ backgroundColor: '#ef4444', color: 'white', borderColor: '#ef4444' }}
-                    onClick={() => handleDeleteResident(selectedResident.id, selectedResident.full_name)}
-                  >
-                    Delete Account
-                  </button>
+                  {selectedResident.is_archived !== 'Yes' ? (
+                    <button 
+                      className="logout-flux-btn" 
+                      style={{ backgroundColor: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                      onClick={() => handleArchiveResident(selectedResident.id, selectedResident.full_name)}
+                    >
+                      Archive Account
+                    </button>
+                  ) : (
+                    <span style={{ padding: '10px 16px', borderRadius: '8px', backgroundColor: '#f3f4f6', color: '#374151' }}>Archived</span>
+                  )}
                 </div>
               </div>
 
@@ -789,7 +916,7 @@ export default function AdminDashboardPage() {
                       <th>Email</th>
                       <th>Gender</th>
                       <th>Age</th>
-                      <th>Applied</th>
+                      <th>Applied On</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -814,7 +941,7 @@ export default function AdminDashboardPage() {
                         <td>{resident.email}</td>
                         <td>{resident.gender || '-'}</td>
                         <td>{resident.age || '-'}</td>
-                        <td>{formatDate(resident.created_at)}</td>
+                        <td>{formatDateTime(resident.created_at)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button 
@@ -889,7 +1016,7 @@ export default function AdminDashboardPage() {
                             </button>
                           </div>
                         </td>
-                        <td>{formatDate(update.created_at)}</td>
+                        <td>{formatDateTime(update.created_at)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button 
@@ -944,7 +1071,7 @@ export default function AdminDashboardPage() {
                       <tr key={r.id}>
                         <td>{r.full_name || r.resident_name || 'Resident #' + r.user_id}</td>
                         <td>{r.certificate_type}</td>
-                        <td>{new Date(r.request_date).toLocaleDateString()}</td>
+                        <td>{formatDateTime(r.request_date)}</td>
                         <td><span className={`status-badge ${r.verification_status === 'Verified' ? 'status-verified' : r.verification_status === 'Not Valid' ? 'status-rejected' : 'status-pending'}`}>{r.verification_status}</span></td>
                         <td><span className={`status-badge ${getProcessStatusClass(r.process_status)}`}>{r.process_status}</span></td>
                         <td>
@@ -1115,8 +1242,8 @@ export default function AdminDashboardPage() {
                 className="modal-save-btn"
                 onClick={async () => {
                   try {
-                    const response = await fetch(`http://127.0.0.1:5000/api/request/${selectedRequest.id}`, {
-                      method: 'PUT', 
+                    const response = await fetch(`/api/request/${selectedRequest.id}`, {
+                      method: 'PUT',
                       headers: { 'Content-Type': 'application/json' }, 
                       body: JSON.stringify({
                         verification_status: editorVerification, 
