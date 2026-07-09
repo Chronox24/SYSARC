@@ -216,6 +216,7 @@ return (
                 placeholder="Alex"
                 value={formData.Nickname}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -311,11 +312,12 @@ return (
                 placeholder="Catholic"
                 value={formData.Religion}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
               <label>Civil Status</label>
-              <select name="CivilStatus" value={formData.CivilStatus} onChange={handleChange}>
+              <select name="CivilStatus" value={formData.CivilStatus} onChange={handleChange} required>
                 <option value="">Select Status</option>
                 <option value="Single">Single</option>
                 <option value="Married">Married</option>
@@ -365,6 +367,7 @@ return (
                 placeholder="Barangay 830"
                 value={formData.Barangay}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -374,6 +377,7 @@ return (
                 placeholder="Metro Manila"
                 value={formData['City/Municipality']}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -386,6 +390,7 @@ return (
                 placeholder="123 Sampaguita St."
                 value={formData.HomeAddress}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -395,6 +400,7 @@ return (
                 placeholder="0912xxxxxxx"
                 value={formData.MobilePhone}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -410,6 +416,7 @@ return (
                 placeholder="Example Elementary School"
                 value={formData.Elementary}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -419,6 +426,7 @@ return (
                 placeholder="2010"
                 value={formData.ElementaryYear}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -431,6 +439,7 @@ return (
                 placeholder="Example High School"
                 value={formData.HighSchool}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -440,6 +449,7 @@ return (
                 placeholder="2016"
                 value={formData.HighSchoolYear}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -452,6 +462,7 @@ return (
                 placeholder="Bachelor of Science in Information Technology"
                 value={formData.CollegeDegree}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -461,6 +472,7 @@ return (
                 placeholder="2023"
                 value={formData.CollegeYear}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -473,6 +485,7 @@ return (
                 placeholder="N/A"
                 value={formData['Post Graduate Degree/course']}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -482,6 +495,7 @@ return (
                 placeholder="N/A"
                 value={formData.PostGraduateYear}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -494,6 +508,7 @@ return (
                 placeholder="N/A"
                 value={formData.Others}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -503,6 +518,7 @@ return (
                 placeholder="N/A"
                 value={formData.OthersYear}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -518,6 +534,7 @@ return (
                 placeholder="Maria Santos"
                 value={formData.EmergencyContactName}
                 onChange={handleChange}
+                required
               />
             </div>
             <div className="form-group">
@@ -527,6 +544,7 @@ return (
                 placeholder="Mother"
                 value={formData.EmergencyContactRelation}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -539,6 +557,7 @@ return (
                 placeholder="0917xxxxxxx"
                 value={formData.EmergencyContactPhone}
                 onChange={handleChange}
+                required
               />
             </div>
           </div>
@@ -549,7 +568,7 @@ return (
           <div className="form-row">
             <div className="form-group">
               <label>Profile Photo</label>
-              <input type="file" accept="image/*" onChange={handlePhotoChange} />
+              <input type="file" accept="image/*" onChange={handlePhotoChange} required />
               {photoPreview && (
                 <div className="photo-preview-container">
                   <img src={photoPreview} alt="Profile preview" className="photo-preview" />
@@ -558,7 +577,7 @@ return (
             </div>
             <div className="form-group">
               <label>ID Picture</label>
-              <input type="file" accept="image/*" onChange={handleIdPhotoChange} />
+              <input type="file" accept="image/*" onChange={handleIdPhotoChange} required />
               {idPhotoPreview && (
                 <div className="photo-preview-container">
                   <img src={idPhotoPreview} alt="ID preview" className="photo-preview" />

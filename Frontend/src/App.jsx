@@ -10,6 +10,7 @@ import RequestFormPage from "./pages/RequestFormPage"
 import AdminLoginPage from "./pages/AdminLoginPage"
 import AdminDashboardPage from "./pages/AdminDashboardPage"
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute"
+import ErrorBoundary from "./components/ErrorBoundary"
 
 function AppContent() {
   const location = useLocation();
@@ -29,12 +30,15 @@ function AppContent() {
         <Route path="/mission" element={<Navigate to="/" replace />} />
         <Route path="/about" element={<Navigate to="/" replace />} />
         <Route path="/request" element={<RequestFormPage />} />
+        <Route path="/admin" element={<Navigate to="/admin-login" replace />} />
         <Route path="/admin-login" element={<AdminLoginPage />} />
         <Route 
           path="/admin-dashboard" 
           element={
             <ProtectedAdminRoute>
-              <AdminDashboardPage />
+              <ErrorBoundary>
+                <AdminDashboardPage />
+              </ErrorBoundary>
             </ProtectedAdminRoute>
           } 
         />

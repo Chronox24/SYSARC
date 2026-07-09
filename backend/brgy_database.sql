@@ -105,6 +105,40 @@ CREATE TABLE `admins` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `archive_folders`
+--
+
+CREATE TABLE `archive_folders` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`parent_id`) REFERENCES `archive_folders`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `archive_files`
+--
+
+CREATE TABLE `archive_files` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `folder_id` int(11) NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_type` varchar(100) NOT NULL,
+  `file_size` int(11) NOT NULL,
+  `file_data` longblob NOT NULL,
+  `uploaded_by` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`folder_id`) REFERENCES `archive_folders`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
 -- AUTO_INCREMENT for tables
 --
 ALTER TABLE `residents` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;

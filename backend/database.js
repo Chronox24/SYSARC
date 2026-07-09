@@ -155,8 +155,47 @@ const pool = mysql.createPool({
         )
     `);
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS archive_folders (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        parent_id INT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES archive_folders(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS archive_files (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        folder_id INT NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        file_type VARCHAR(100) NOT NULL,
+        file_size INT NOT NULL,
+        file_data LONGBLOB NOT NULL,
+        uploaded_by VARCHAR(100) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (folder_id) REFERENCES archive_folders(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS resident_archive_folders (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        parent_id INT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES resident_archive_folders(id) ON DELETE CASCADE
+      )
+    `);
+
     await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS id_photo LONGBLOB;`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS archive_folder_id INT DEFAULT NULL;`);
+    await connection.query(`ALTER TABLE residents ADD CONSTRAINT fk_resident_archive_folder FOREIGN KEY (archive_folder_id) REFERENCES resident_archive_folders(id) ON DELETE SET NULL;`).catch(() => {}); // Catch if constraint already exists
+
     await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending';`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS is_archived ENUM('No', 'Yes') DEFAULT 'No';`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS archived_at DATETIME DEFAULT NULL;`);
     await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
     await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
     await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS nickname VARCHAR(255);`);
@@ -488,6 +527,16 @@ app.put("/api/admin/verify-resident/:userId", async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+app.put("/api/admin/verify-all-residents", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET is_verified = 'Approved' WHERE is_verified = 'Pending'");
+            res.json({ message: "All pending residents approved successfully" });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 app.put("/api/admin/reject-resident/:userId", async (req, res) => {
     try {
         const { userId } = req.params;
@@ -721,6 +770,204 @@ app.post("/api/admin/setup", async (req, res) => {
             if (rows.length > 0) return res.json({ message: "Admin account already exists" });
             await connection.execute("INSERT INTO admins (name, role, email, password) VALUES (?, ?, ?, ?)", ['SYSARCH Admin', 'Administrator', adminEmail, hashedPassword]);
             res.json({ message: "Admin account created successfully", email: adminEmail, password: adminPassword });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- ADMIN RESIDENT ARCHIVE FOLDERS ---
+
+app.get("/api/admin/resident-archive-folders", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM resident_archive_folders ORDER BY created_at DESC");
+            res.json(rows);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post("/api/admin/resident-archive-folders", async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            const [result] = await connection.execute("INSERT INTO resident_archive_folders (name) VALUES (?)", [name]);
+            res.status(201).json({ message: 'Folder created', folderId: result.insertId });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/resident-archive-folders/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE resident_archive_folders SET name = ? WHERE id = ?", [name, id]);
+            res.json({ message: 'Folder renamed successfully' });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/resident-archive-folders/move", async (req, res) => {
+    try {
+        const { residentId, folderId } = req.body;
+        if (!residentId) return res.status(400).json({ message: 'Resident ID is required' });
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET archive_folder_id = ? WHERE id = ?", [folderId || null, residentId]);
+            res.json({ message: 'Resident moved to folder successfully' });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- ADMIN DOCUMENT ARCHIVES ---
+
+// Get all folders
+app.get("/api/admin/archive-folders", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM archive_folders ORDER BY created_at DESC");
+            res.json(rows);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Create folder
+app.post("/api/admin/archive-folders", async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            const [result] = await connection.execute("INSERT INTO archive_folders (name) VALUES (?)", [name]);
+            res.status(201).json({ message: 'Folder created', folderId: result.insertId });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Rename folder
+app.put("/api/admin/archive-folders/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE archive_folders SET name = ? WHERE id = ?", [name, id]);
+            res.json({ message: 'Folder renamed successfully' });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Get files in a folder (metadata only)
+app.get("/api/admin/archive-files/:folderId", async (req, res) => {
+    try {
+        const { folderId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT id, folder_id, file_name, file_type, file_size, uploaded_by, created_at FROM archive_files WHERE folder_id = ? ORDER BY created_at DESC", [folderId]);
+            res.json(rows);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Download a file
+app.get("/api/admin/archive-files/download/:fileId", async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT file_name, file_type, file_data FROM archive_files WHERE id = ?", [fileId]);
+            if (rows.length === 0) return res.status(404).json({ message: 'File not found' });
+            
+            const file = rows[0];
+            
+            res.setHeader('Content-Type', file.file_type);
+            res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+            res.send(file.file_data);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Upload a file to a folder
+app.post("/api/admin/archive-files", upload.single('file'), async (req, res) => {
+    try {
+        const { folder_id, uploaded_by } = req.body;
+        const file = req.file;
+        
+        if (!folder_id) return res.status(400).json({ message: 'Folder ID is required' });
+        if (!file) return res.status(400).json({ message: 'File is required' });
+        
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute(
+                "INSERT INTO archive_files (folder_id, file_name, file_type, file_size, file_data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)",
+                [folder_id, file.originalname, file.mimetype, file.size, file.buffer, uploaded_by || 'Admin']
+            );
+            res.status(201).json({ message: 'File uploaded successfully' });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Resident Archive Folders
+app.get("/api/admin/resident-archive-folders", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM resident_archive_folders ORDER BY created_at DESC");
+            res.json(rows);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post("/api/admin/resident-archive-folders", async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            const [result] = await connection.execute("INSERT INTO resident_archive_folders (name) VALUES (?)", [name]);
+            res.status(201).json({ id: result.insertId, name });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/resident-archive-folders/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ message: 'Folder name is required' });
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE resident_archive_folders SET name = ? WHERE id = ?", [name, id]);
+            res.json({ message: 'Folder renamed successfully' });
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Archived Residents
+app.get("/api/admin/archived-residents", async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT * FROM residents WHERE is_archived = 'Yes' ORDER BY created_at DESC");
+            res.json(rows);
+        } finally { connection.release(); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put("/api/admin/resident/:id/folder", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { folder_id } = req.body;
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET archive_folder_id = ? WHERE id = ?", [folder_id, id]);
+            res.json({ message: 'Resident moved to folder successfully' });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });

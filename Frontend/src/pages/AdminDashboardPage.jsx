@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import '../styles/AdminFlux.css'
+
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
@@ -12,6 +14,9 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('residents')
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortOrder, setSortOrder] = useState('newest')
+  const [requestSearchTerm, setRequestSearchTerm] = useState('')
+  const [requestStatusFilter, setRequestStatusFilter] = useState('All')
   const [selectedResident, setSelectedResident] = useState(null)
   const [pendingRegistrations, setPendingRegistrations] = useState([])
   const [pendingUpdates, setPendingUpdates] = useState([])
@@ -20,6 +25,7 @@ export default function AdminDashboardPage() {
   const [editorContent, setEditorContent] = useState('')
   const [editorVerification, setEditorVerification] = useState('Not Verified')
   const [editorProcess, setEditorProcess] = useState('In process')
+  const [viewMockupRequest, setViewMockupRequest] = useState(null)
 
   const [messages, setMessages] = useState([])
   const [conversations, setConversations] = useState([])
@@ -27,7 +33,86 @@ export default function AdminDashboardPage() {
   const [replyText, setReplyText] = useState('')
   const [theme, setTheme] = useState('light')
 
+  const [notifications, setNotifications] = useState([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const prevCountsRef = React.useRef({ pendingReg: 0, pendingUpd: 0, requests: 0, messages: 0 })
+
+  const [archiveSubTab, setArchiveSubTab] = useState('residents')
+  const [archiveFolders, setArchiveFolders] = useState([])
+  const [archiveFiles, setArchiveFiles] = useState([])
+  const [currentFolder, setCurrentFolder] = useState(null)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
+
+  const [residentArchiveFolders, setResidentArchiveFolders] = useState([])
+  const [currentResidentFolder, setCurrentResidentFolder] = useState(null)
+  const [newResidentFolderName, setNewResidentFolderName] = useState('')
+  const [showCreateResidentFolder, setShowCreateResidentFolder] = useState(false)
+  const [editingFolderId, setEditingFolderId] = useState(null)
+  const [editingFolderName, setEditingFolderName] = useState('')
   const messagesEndRef = React.useRef(null)
+
+  const analyticsData = useMemo(() => {
+    // 1. Registrations over time
+    const registrationsByMonth = (Array.isArray(accounts) ? accounts : []).reduce((acc, account) => {
+      const date = new Date(account.created_at);
+      if (isNaN(date.getTime())) return acc;
+      const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      acc[monthYear] = (acc[monthYear] || 0) + 1;
+      return acc;
+    }, {});
+    const registrationData = Object.keys(registrationsByMonth).map(key => ({
+      name: key,
+      Registrations: registrationsByMonth[key]
+    })).sort((a, b) => new Date(a.name) - new Date(b.name)).slice(-6); // Last 6 months
+
+    // 2. Certificate Requests Breakdown
+    const requestsByType = (Array.isArray(certificateRequests) ? certificateRequests : []).reduce((acc, req) => {
+      acc[req.certificate_type] = (acc[req.certificate_type] || 0) + 1;
+      return acc;
+    }, {});
+    const requestTypeData = Object.keys(requestsByType).map(key => ({
+      name: key,
+      value: requestsByType[key]
+    }));
+
+    // 3. Age Demographics
+    const ageGroups = { '18-25': 0, '26-35': 0, '36-50': 0, '51-65': 0, '65+': 0, 'Unknown': 0 };
+    (Array.isArray(accounts) ? accounts : []).forEach(account => {
+      let age = account.age;
+      if (!age && account.date_of_birth) {
+        age = new Date().getFullYear() - new Date(account.date_of_birth).getFullYear();
+      }
+      if (age) {
+        if (age >= 18 && age <= 25) ageGroups['18-25']++;
+        else if (age >= 26 && age <= 35) ageGroups['26-35']++;
+        else if (age >= 36 && age <= 50) ageGroups['36-50']++;
+        else if (age >= 51 && age <= 65) ageGroups['51-65']++;
+        else if (age > 65) ageGroups['65+']++;
+        else ageGroups['Unknown']++;
+      } else {
+        ageGroups['Unknown']++;
+      }
+    });
+    const ageData = Object.keys(ageGroups).map(key => ({
+      name: key,
+      Count: ageGroups[key]
+    })).filter(data => data.Count > 0);
+
+    // 4. Request Status Breakdown
+    const statusCounts = (Array.isArray(certificateRequests) ? certificateRequests : []).reduce((acc, req) => {
+      acc[req.process_status] = (acc[req.process_status] || 0) + 1;
+      return acc;
+    }, {});
+    const statusData = Object.keys(statusCounts).map(key => ({
+      name: key,
+      Count: statusCounts[key]
+    }));
+
+    return { registrationData, requestTypeData, ageData, statusData };
+  }, [accounts, certificateRequests]);
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -69,22 +154,67 @@ export default function AdminDashboardPage() {
     if (activeTab === 'chat') fetchConversations()
     if (activeTab === 'pending') fetchPendingRegistrations()
     if (activeTab === 'updates') fetchPendingUpdates()
-    if (activeTab === 'archived') fetchArchivedAccounts()
-  }, [activeTab])
+    if (activeTab === 'archived') {
+      fetchArchivedAccounts()
+      if (archiveSubTab === 'files') {
+        currentFolder ? fetchArchiveFiles(currentFolder.id) : fetchArchiveFolders()
+      } else if (archiveSubTab === 'residents') {
+        fetchResidentArchiveFolders()
+      }
+    }
+  }, [activeTab, archiveSubTab, currentFolder, currentResidentFolder])
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (activeTab === 'requests') fetchRequests()
-      if (activeTab === 'chat') {
-        fetchConversations()
-        if (selectedChatResident) {
-          fetchMessages(selectedChatResident.id)
-          markAsRead(selectedChatResident.id)
-        }
+      // Background polling for all pending data to keep badges "live"
+      fetchPendingRegistrations();
+      fetchPendingUpdates();
+      fetchRequests();
+      fetchConversations();
+      
+      // Update specific chat messages if chat tab is open and resident is selected
+      if (activeTab === 'chat' && selectedChatResident) {
+        fetchMessages(selectedChatResident.id);
+        markAsRead(selectedChatResident.id);
       }
-    }, 5000);
+    }, 10000); // Check every 10 seconds
     return () => clearInterval(timer);
   }, [activeTab, selectedChatResident])
+
+  const pendingRegCount = pendingRegistrations.length;
+  const pendingUpdCount = pendingUpdates.length;
+  const activeRequestsCount = Array.isArray(certificateRequests) ? certificateRequests.filter(r => r.process_status === 'In process').length : 0;
+  const unreadMessagesCount = Array.isArray(conversations) ? conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0) : 0;
+
+  useEffect(() => {
+    const prev = prevCountsRef.current;
+    const newNotifs = [];
+
+    // Trigger notification if counts increased since last check
+    if (pendingRegCount > prev.pendingReg) newNotifs.push(`New pending registration received!`);
+    if (pendingUpdCount > prev.pendingUpd) newNotifs.push(`New profile update request!`);
+    if (activeRequestsCount > prev.requests) newNotifs.push(`New certificate request!`);
+    if (unreadMessagesCount > prev.messages) newNotifs.push(`New unread message!`);
+
+    if (newNotifs.length > 0) {
+      setNotifications(prevNotifs => {
+        const notifObjects = newNotifs.map(text => ({
+          id: Date.now() + Math.random(),
+          text,
+          time: new Date().toLocaleTimeString(),
+          isNew: true
+        }));
+        return [...notifObjects, ...prevNotifs].slice(0, 50); // Keep last 50 notifications
+      });
+    }
+
+    prevCountsRef.current = {
+      pendingReg: pendingRegCount,
+      pendingUpd: pendingUpdCount,
+      requests: activeRequestsCount,
+      messages: unreadMessagesCount
+    };
+  }, [pendingRegCount, pendingUpdCount, activeRequestsCount, unreadMessagesCount]);
 
   const fetchConversations = async () => {
     try {
@@ -177,6 +307,74 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchArchiveFolders = async () => {
+    try {
+      const res = await fetch('/api/admin/archive-folders')
+      const data = await res.json()
+      setArchiveFolders(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load folders:', err)
+    }
+  }
+
+  const fetchArchiveFiles = async (folderId) => {
+    try {
+      const res = await fetch(`/api/admin/archive-files/${folderId}`)
+      const data = await res.json()
+      setArchiveFiles(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load files:', err)
+    }
+  }
+
+  const handleCreateFolder = async (e) => {
+    e.preventDefault()
+    if (!newFolderName.trim()) return
+    try {
+      const res = await fetch('/api/admin/archive-folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newFolderName })
+      })
+      if (res.ok) {
+        setNewFolderName('')
+        setShowCreateFolder(false)
+        fetchArchiveFolders()
+      } else {
+        alert('Failed to create folder')
+      }
+    } catch (err) {
+      console.error('Error creating folder:', err)
+    }
+  }
+
+  const handleFileUpload = async (e) => {
+    if (!e.target.files || !e.target.files[0] || !currentFolder) return
+    const file = e.target.files[0]
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folder_id', currentFolder.id)
+    formData.append('uploaded_by', admin.name)
+
+    setUploadingFile(true)
+    try {
+      const res = await fetch('/api/admin/archive-files', {
+        method: 'POST',
+        body: formData
+      })
+      if (res.ok) {
+        fetchArchiveFiles(currentFolder.id)
+      } else {
+        alert('Failed to upload file')
+      }
+    } catch (err) {
+      console.error('Error uploading file:', err)
+    } finally {
+      setUploadingFile(false)
+      e.target.value = null
+    }
+  }
+
   const fetchAccounts = async () => {
     try {
       const response = await fetch('/api/all-accounts')
@@ -186,6 +384,26 @@ export default function AdminDashboardPage() {
       console.error('Failed to fetch accounts:', err)
     }
     setLoading(false)
+  }
+
+  const fetchArchivedAccounts = async () => {
+    try {
+      const response = await fetch('/api/admin/archived-residents')
+      const data = await response.json()
+      setArchivedAccounts(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to fetch archived accounts:', err)
+    }
+  }
+
+  const fetchResidentArchiveFolders = async () => {
+    try {
+      const res = await fetch('/api/admin/resident-archive-folders')
+      const data = await res.json()
+      setResidentArchiveFolders(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load resident folders:', err)
+    }
   }
 
   const fetchRequests = async () => {
@@ -293,12 +511,35 @@ export default function AdminDashboardPage() {
     }
   }
 
+  const handleApproveAllResidents = async () => {
+    if (!window.confirm('Are you sure you want to approve ALL pending registrations?')) return
+    try {
+      const response = await fetch('/api/admin/verify-all-residents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      if (response.ok) {
+        alert('All pending residents approved successfully!')
+        fetchPendingRegistrations()
+        fetchAccounts()
+      } else {
+        alert('Failed to approve all residents')
+      }
+    } catch (err) {
+      console.error('Error approving all residents:', err)
+      alert('Error approving all residents')
+    }
+  }
+
   const refreshAll = () => {
     fetchAccounts();
     fetchRequests();
     fetchConversations();
     if (activeTab === 'archived') {
       fetchArchivedAccounts();
+      if (archiveSubTab === 'files') {
+        currentFolder ? fetchArchiveFiles(currentFolder.id) : fetchArchiveFolders()
+      }
     }
   }
 
@@ -395,6 +636,81 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleCreateResidentFolder = async (e) => {
+    e.preventDefault();
+    if (!newResidentFolderName.trim()) return;
+    try {
+      const response = await fetch('/api/admin/resident-archive-folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newResidentFolderName })
+      });
+      if (response.ok) {
+        setNewResidentFolderName('');
+        setShowCreateResidentFolder(false);
+        fetchResidentArchiveFolders();
+      } else {
+        alert('Failed to create folder');
+      }
+    } catch (err) {
+      console.error('Error creating folder:', err);
+    }
+  };
+
+  const handleMoveResidentToFolder = async (residentId, folderId) => {
+    try {
+      const response = await fetch('/api/admin/resident-archive-folders/move', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ residentId, folderId })
+      });
+      if (response.ok) {
+        fetchArchivedAccounts();
+      } else {
+        alert('Failed to move resident');
+      }
+    } catch (err) {
+      console.error('Error moving resident:', err);
+    }
+  };
+
+  const handleRenameFolder = async (e, folderId, isResidentFolder) => {
+    e.stopPropagation();
+    if (!editingFolderName.trim()) {
+      setEditingFolderId(null);
+      return;
+    }
+    try {
+      const endpoint = isResidentFolder 
+        ? `/api/admin/resident-archive-folders/${folderId}`
+        : `/api/admin/archive-folders/${folderId}`;
+      
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editingFolderName })
+      });
+      if (res.ok) {
+        setEditingFolderId(null);
+        if (isResidentFolder) {
+          fetchResidentArchiveFolders();
+        } else {
+          fetchArchiveFolders();
+        }
+      } else {
+        alert('Failed to rename folder');
+      }
+    } catch (err) {
+      console.error('Error renaming folder:', err);
+    }
+  };
+
+  const startEditingFolder = (e, folder) => {
+    e.stopPropagation();
+    setEditingFolderId(folder.id);
+    setEditingFolderName(folder.name);
+  };
+
   if (loading) return (
     <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
       <div className="loading-spinner"></div>
@@ -407,14 +723,44 @@ export default function AdminDashboardPage() {
 
   // Safety check for stats
   const totalResidents = Array.isArray(accounts) ? accounts.length : 0;
-  const activeRequestsCount = Array.isArray(certificateRequests) ? certificateRequests.filter(r => r.process_status === 'In process').length : 0;
-  const unreadMessagesCount = Array.isArray(conversations) ? conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0) : 0;
 
   const filteredAccounts = (Array.isArray(accounts) ? accounts : []).filter(account => {
-    const nameMatch = account?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false
-    const emailMatch = account?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || false
-    return nameMatch || emailMatch
-  })
+    const searchLower = searchTerm.toLowerCase();
+    const nameMatch = account?.full_name?.toLowerCase().includes(searchLower) || false;
+    const emailMatch = account?.email?.toLowerCase().includes(searchLower) || false;
+    
+    // Add year-based search for account creation year
+    let yearMatch = false;
+    if (account?.created_at) {
+      const year = new Date(account.created_at).getFullYear().toString();
+      if (year.includes(searchLower)) yearMatch = true;
+    }
+
+    return nameMatch || emailMatch || yearMatch;
+  }).sort((a, b) => {
+    if (sortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (sortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    if (sortOrder === 'nameAsc') return (a.full_name || '').localeCompare(b.full_name || '');
+    if (sortOrder === 'nameDesc') return (b.full_name || '').localeCompare(a.full_name || '');
+    return 0;
+  });
+
+  const filteredRequests = (Array.isArray(certificateRequests) ? certificateRequests : []).filter(r => {
+    const searchLower = requestSearchTerm.toLowerCase();
+    const matchesSearch = (r.full_name || r.resident_name || '').toLowerCase().includes(searchLower) || 
+                          (r.certificate_type || '').toLowerCase().includes(searchLower);
+    
+    if (requestStatusFilter === 'All') return matchesSearch;
+    
+    const searchStatus = requestStatusFilter.toLowerCase();
+    const verifyStatus = (r.verification_status || '').toLowerCase();
+    const processStatus = (r.process_status || '').toLowerCase();
+    
+    // "Void" translates to "Not Valid" in the database/UI options
+    const isVoidMatch = searchStatus === 'void' && verifyStatus === 'not valid';
+    
+    return matchesSearch && (verifyStatus === searchStatus || processStatus === searchStatus || isVoidMatch);
+  });
 
   const filteredArchivedAccounts = (Array.isArray(archivedAccounts) ? archivedAccounts : []).filter(account => {
     const nameMatch = account?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false
@@ -445,29 +791,37 @@ export default function AdminDashboardPage() {
         
         <nav className="sidebar-nav">
           <p className="nav-section-title">Overview</p>
+          <button className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
+            <span className="nav-icon">📈</span>
+            <span className="nav-label" style={{ flex: 1 }}>Analytics</span>
+          </button>
           <button className={`nav-item ${activeTab === 'residents' ? 'active' : ''}`} onClick={() => setActiveTab('residents')}>
             <span className="nav-icon">👥</span>
-            <span className="nav-label">Residents</span>
+            <span className="nav-label" style={{ flex: 1 }}>Residents</span>
           </button>
           <button className={`nav-item ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
             <span className="nav-icon">⏳</span>
-            <span className="nav-label">Pending Registrations</span>
+            <span className="nav-label" style={{ flex: 1 }}>Pending Registrations</span>
+            {pendingRegistrations.length > 0 && <span className="unread-badge">{pendingRegistrations.length}</span>}
           </button>
           <button className={`nav-item ${activeTab === 'updates' ? 'active' : ''}`} onClick={() => setActiveTab('updates')}>
             <span className="nav-icon">🔄</span>
-            <span className="nav-label">Profile Updates</span>
+            <span className="nav-label" style={{ flex: 1 }}>Profile Updates</span>
+            {pendingUpdates.length > 0 && <span className="unread-badge">{pendingUpdates.length}</span>}
           </button>
           <button className={`nav-item ${activeTab === 'requests' ? 'active' : ''}`} onClick={() => setActiveTab('requests')}>
             <span className="nav-icon">📜</span>
-            <span className="nav-label">Requests</span>
+            <span className="nav-label" style={{ flex: 1 }}>Requests</span>
+            {activeRequestsCount > 0 && <span className="unread-badge">{activeRequestsCount}</span>}
           </button>
           <button className={`nav-item ${activeTab === 'archived' ? 'active' : ''}`} onClick={() => setActiveTab('archived')}>
             <span className="nav-icon">🗄️</span>
-            <span className="nav-label">Archived</span>
+            <span className="nav-label" style={{ flex: 1 }}>Archived</span>
           </button>
           <button className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
             <span className="nav-icon">💬</span>
-            <span className="nav-label">Support Chat</span>
+            <span className="nav-label" style={{ flex: 1 }}>Support Chat</span>
+            {unreadMessagesCount > 0 && <span className="unread-badge">{unreadMessagesCount}</span>}
           </button>
         </nav>
 
@@ -482,17 +836,63 @@ export default function AdminDashboardPage() {
 
       {/* Main Content */}
       <main className="flux-main">
-        <header className="flux-header">
-          <div className="header-search">
-            <span className="search-icon">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Search residents, requests..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <header className="flux-header" style={{ justifyContent: 'flex-end', position: 'relative' }}>
           <div className="header-actions">
+            <div style={{ position: 'relative' }}>
+              <button 
+                className="logout-flux-btn" 
+                style={{ position: 'relative', padding: '8px 12px', fontSize: '18px' }}
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                🔔
+                {notifications.filter(n => n.isNew).length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: '-5px', right: '-5px',
+                    backgroundColor: 'red', color: 'white', borderRadius: '50%',
+                    padding: '2px 6px', fontSize: '12px', fontWeight: 'bold'
+                  }}>
+                    {notifications.filter(n => n.isNew).length}
+                  </span>
+                )}
+              </button>
+              
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: '0', marginTop: '10px',
+                  width: '300px', backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)',
+                  borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 1000,
+                  maxHeight: '400px', overflowY: 'auto'
+                }}>
+                  <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px' }}>Notifications</h3>
+                    <button 
+                      onClick={() => setNotifications(n => n.map(x => ({...x, isNew: false})))}
+                      style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  <div style={{ padding: '10px' }}>
+                    {notifications.length === 0 ? (
+                      <p style={{ textAlign: 'center', color: 'var(--text-secondary)', margin: '20px 0' }}>No notifications yet.</p>
+                    ) : (
+                      notifications.map(notif => (
+                        <div key={notif.id} style={{
+                          padding: '10px', borderBottom: '1px solid var(--border-color)',
+                          backgroundColor: notif.isNew ? 'rgba(52, 152, 219, 0.1)' : 'transparent',
+                          borderRadius: '4px', marginBottom: '4px'
+                        }}>
+                          <p style={{ margin: '0 0 5px 0', fontSize: '14px', fontWeight: notif.isNew ? 'bold' : 'normal' }}>{notif.text}</p>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{notif.time}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <button className="logout-flux-btn" onClick={refreshAll}>🔄 Refresh</button>
             <button className="logout-flux-btn" onClick={handleLogout}>Sign Out</button>
           </div>
@@ -590,7 +990,36 @@ export default function AdminDashboardPage() {
         <div className={`content-container ${activeTab === 'chat' ? 'chat-active' : ''}`}>
           {activeTab === 'residents' && (
             <>
-              <h2>👥 Registered Residents</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0 }}>👥 Registered Residents</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div className="header-search" style={{ margin: 0 }}>
+                    <span className="search-icon">🔍</span>
+                    <input 
+                      type="text" 
+                      className="flux-input"
+                      placeholder="Search residents by name, email, or year..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      style={{ paddingLeft: '35px', width: '250px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Sort By:</label>
+                  <select 
+                    className="flux-select"
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                    style={{ width: '160px' }}
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="nameAsc">Name (A-Z)</option>
+                    <option value="nameDesc">Name (Z-A)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
               <table className="flux-table">
                 <thead>
                   <tr>
@@ -653,58 +1082,365 @@ export default function AdminDashboardPage() {
             </>
           )}
 
+          {activeTab === 'analytics' && (
+            <div className="analytics-dashboard">
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-primary)' }}>📈 Analytics Overview</h2>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+                
+                {/* Registrations Over Time */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Resident Registrations (Last 6 Months)</h3>
+                  <div style={{ height: '300px', width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={analyticsData.registrationData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <Line type="monotone" dataKey="Registrations" stroke="#3b82f6" strokeWidth={3} dot={{ r: 5 }} />
+                        <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <RechartsTooltip />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Request Types Distribution */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Certificate Requests Breakdown</h3>
+                  <div style={{ height: '300px', width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={analyticsData.requestTypeData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {analyticsData.requestTypeData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend verticalAlign="bottom" height={36}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Age Demographics */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Age Demographics</h3>
+                  <div style={{ height: '300px', width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analyticsData.ageData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Bar dataKey="Count" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Status Breakdown */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Requests by Process Status</h3>
+                  <div style={{ height: '300px', width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analyticsData.statusData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {activeTab === 'archived' && (
             <div>
-              <h2>🗄️ Archived Residents</h2>
-              {Object.keys(archivedAccountsByPeriod).length > 0 ? (
-                Object.entries(archivedAccountsByPeriod).map(([period, accounts]) => (
-                  <div key={period} className="archived-group">
-                    <h3 style={{ marginTop: '24px', marginBottom: '12px', color: 'var(--text-primary)' }}>{period}</h3>
-                    <table className="flux-table">
-                      <thead>
-                        <tr>
-                          <th>Photo</th>
-                          <th>Full Name</th>
-                          <th>Email</th>
-                          <th>Gender</th>
-                          <th>Age</th>
-                          <th>Birthday</th>
-                          <th>Joined</th>
-                          <th>Archived On</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accounts.map((account) => (
-                          <tr key={account.id}>
-                            <td>
-                              <div className="admin-photo-cell">
-                                <div 
-                                  className="admin-photo-preview clickable"
-                                  onClick={() => account.photo && setSelectedPhoto(account.photo)}
-                                >
-                                  {account.photo ? <img src={account.photo} alt="" /> : <div className="admin-photo-placeholder">None</div>}
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <button className="resident-name-button" onClick={() => openResidentDetails(account)}>
-                                {account.full_name}
-                              </button>
-                            </td>
-                            <td>{account.email}</td>
-                            <td>{account.gender || '-'}</td>
-                            <td>{account.age || '-'}</td>
-                            <td>{formatDate(account.date_of_birth)}</td>
-                            <td>{formatDateTime(account.created_at)}</td>
-                            <td>{formatDateTime(account.archived_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '2px solid var(--border-color)', paddingBottom: '10px', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <button 
+                    style={{ background: 'none', border: 'none', fontSize: '18px', fontWeight: archiveSubTab === 'residents' ? 'bold' : 'normal', color: archiveSubTab === 'residents' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer' }}
+                    onClick={() => setArchiveSubTab('residents')}
+                  >
+                    🗄️ Archived Residents
+                  </button>
+                  <button 
+                    style={{ background: 'none', border: 'none', fontSize: '18px', fontWeight: archiveSubTab === 'files' ? 'bold' : 'normal', color: archiveSubTab === 'files' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer' }}
+                    onClick={() => setArchiveSubTab('files')}
+                  >
+                    📁 Document Archives
+                  </button>
+                </div>
+                {archiveSubTab === 'residents' && (
+                  <div className="header-search" style={{ margin: 0 }}>
+                    <span className="search-icon">🔍</span>
+                    <input 
+                      type="text" 
+                      placeholder="Search archived residents..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      style={{ padding: '8px 12px 8px 35px' }}
+                    />
                   </div>
-                ))
-              ) : (
-                <p style={{ padding: '18px 0', color: 'var(--text-secondary)' }}>No archived residents found.</p>
+                )}
+              </div>
+
+              {archiveSubTab === 'residents' && (
+                <div className="resident-archives">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                      {currentResidentFolder ? (
+                        <>
+                          <button className="logout-flux-btn" onClick={() => setCurrentResidentFolder(null)} style={{ marginRight: '10px', padding: '8px 12px' }}>← Back</button>
+                          🗂️ {currentResidentFolder.name}
+                        </>
+                      ) : (
+                        "Resident Folders"
+                      )}
+                    </div>
+                    <div>
+                      {!currentResidentFolder && (
+                        <button className="logout-flux-btn" onClick={() => setShowCreateResidentFolder(true)}>+ Create Folder</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {showCreateResidentFolder && (
+                    <div style={{ marginBottom: '20px', padding: '15px', background: 'var(--bg-secondary)', borderRadius: '8px', display: 'flex', gap: '10px' }}>
+                      <input 
+                        type="text" 
+                        placeholder="Folder Name" 
+                        value={newResidentFolderName}
+                        onChange={(e) => setNewResidentFolderName(e.target.value)}
+                        style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', flex: 1 }}
+                      />
+                      <button className="logout-flux-btn" onClick={handleCreateResidentFolder}>Save</button>
+                      <button className="logout-flux-btn" onClick={() => setShowCreateResidentFolder(false)} style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fee2e2' }}>Cancel</button>
+                    </div>
+                  )}
+
+                  {!currentResidentFolder && (
+                    <div className="archive-grid" style={{ marginBottom: '40px' }}>
+                      {residentArchiveFolders.length > 0 ? residentArchiveFolders.map(folder => (
+                        <div key={folder.id} className="folder-card" onClick={() => setCurrentResidentFolder(folder)}>
+                          <div className="folder-icon">🗂️</div>
+                          <div className="folder-name" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
+                            {editingFolderId === folder.id ? (
+                              <div style={{ display: 'flex', gap: '5px', flex: 1 }} onClick={(e) => e.stopPropagation()}>
+                                <input 
+                                  type="text" 
+                                  value={editingFolderName}
+                                  onChange={(e) => setEditingFolderName(e.target.value)}
+                                  onKeyPress={(e) => e.key === 'Enter' && handleRenameFolder(e, folder.id, true)}
+                                  style={{ padding: '4px', width: '100%', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                                  autoFocus
+                                />
+                                <button className="logout-flux-btn" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={(e) => handleRenameFolder(e, folder.id, true)}>Save</button>
+                                <button className="logout-flux-btn" style={{ padding: '4px 8px', fontSize: '12px', background: '#fef2f2', color: '#991b1b', border: '1px solid #fee2e2' }} onClick={(e) => { e.stopPropagation(); setEditingFolderId(null) }}>✕</button>
+                              </div>
+                            ) : (
+                              <>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder.name}</span>
+                                <button 
+                                  onClick={(e) => startEditingFolder(e, folder)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '0 5px' }}
+                                  title="Rename folder"
+                                >
+                                  ✎
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          <div className="folder-meta">{formatDateTime(folder.created_at)}</div>
+                        </div>
+                      )) : (
+                        <p style={{ color: 'var(--text-secondary)' }}>No resident folders created yet.</p>
+                      )}
+                    </div>
+                  )}
+
+
+                  <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '20px', color: 'var(--text-primary)' }}>
+                    {currentResidentFolder ? `Residents in ${currentResidentFolder.name}` : 'Unassigned Residents'}
+                  </h3>
+
+                  {(() => {
+                    const residentsToDisplay = filteredArchivedAccounts.filter(a => 
+                      currentResidentFolder 
+                        ? a.archive_folder_id === currentResidentFolder.id 
+                        : !a.archive_folder_id
+                    );
+
+                    if (residentsToDisplay.length === 0) {
+                      return <p style={{ padding: '18px 0', color: 'var(--text-secondary)' }}>No residents found here.</p>;
+                    }
+
+                    return (
+                      <table className="flux-table">
+                        <thead>
+                          <tr>
+                            <th>Photo</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Birthday</th>
+                            <th>Archived On</th>
+                            <th>Move to Folder</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {residentsToDisplay.map((account) => (
+                            <tr key={account.id}>
+                              <td>
+                                <div className="admin-photo-cell">
+                                  <div 
+                                    className="admin-photo-preview clickable"
+                                    onClick={() => account.photo && setSelectedPhoto(account.photo)}
+                                  >
+                                    {account.photo ? <img src={account.photo} alt="" /> : <div className="admin-photo-placeholder">None</div>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <button className="resident-name-button" onClick={() => openResidentDetails(account)}>
+                                  {account.full_name}
+                                </button>
+                              </td>
+                              <td>{account.email}</td>
+                              <td>{formatDate(account.date_of_birth)}</td>
+                              <td>{formatDateTime(account.archived_at)}</td>
+                              <td>
+                                <select 
+                                  value={account.archive_folder_id || ""}
+                                  onChange={(e) => handleMoveResidentToFolder(account.id, e.target.value || null)}
+                                  style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                                >
+                                  <option style={{ color: '#000', backgroundColor: '#fff' }} value="">Unassigned</option>
+                                  {residentArchiveFolders.map(f => (
+                                    <option style={{ color: '#000', backgroundColor: '#fff' }} key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {archiveSubTab === 'files' && (
+                <div className="document-archives">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                      {currentFolder ? (
+                        <>
+                          <button className="logout-flux-btn" onClick={() => setCurrentFolder(null)} style={{ marginRight: '10px', padding: '8px 12px' }}>← Back</button>
+                          📁 {currentFolder.name}
+                        </>
+                      ) : (
+                        "Root Folders"
+                      )}
+                    </div>
+                    <div>
+                      {!currentFolder ? (
+                        <button className="logout-flux-btn" onClick={() => setShowCreateFolder(true)}>+ Create Folder</button>
+                      ) : (
+                        <label className="logout-flux-btn" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                          {uploadingFile ? 'Uploading...' : '↑ Upload File'}
+                          <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploadingFile} />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  {showCreateFolder && (
+                    <div style={{ marginBottom: '20px', padding: '15px', background: 'var(--bg-secondary)', borderRadius: '8px', display: 'flex', gap: '10px' }}>
+                      <input 
+                        type="text" 
+                        placeholder="Folder Name" 
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', flex: 1 }}
+                      />
+                      <button className="logout-flux-btn" onClick={handleCreateFolder}>Save</button>
+                      <button className="logout-flux-btn" onClick={() => setShowCreateFolder(false)} style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fee2e2' }}>Cancel</button>
+                    </div>
+                  )}
+
+                  {!currentFolder ? (
+                    <div className="archive-grid">
+                      {archiveFolders.length > 0 ? archiveFolders.map(folder => (
+                        <div key={folder.id} className="folder-card" onClick={() => setCurrentFolder(folder)}>
+                          <div className="folder-icon">📁</div>
+                          <div className="folder-name" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
+                            {editingFolderId === folder.id ? (
+                              <div style={{ display: 'flex', gap: '5px', flex: 1 }} onClick={(e) => e.stopPropagation()}>
+                                <input 
+                                  type="text" 
+                                  value={editingFolderName}
+                                  onChange={(e) => setEditingFolderName(e.target.value)}
+                                  onKeyPress={(e) => e.key === 'Enter' && handleRenameFolder(e, folder.id, false)}
+                                  style={{ padding: '4px', width: '100%', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                                  autoFocus
+                                />
+                                <button className="logout-flux-btn" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={(e) => handleRenameFolder(e, folder.id, false)}>Save</button>
+                                <button className="logout-flux-btn" style={{ padding: '4px 8px', fontSize: '12px', background: '#fef2f2', color: '#991b1b', border: '1px solid #fee2e2' }} onClick={(e) => { e.stopPropagation(); setEditingFolderId(null) }}>✕</button>
+                              </div>
+                            ) : (
+                              <>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder.name}</span>
+                                <button 
+                                  onClick={(e) => startEditingFolder(e, folder)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '0 5px' }}
+                                  title="Rename folder"
+                                >
+                                  ✎
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          <div className="folder-meta">{formatDateTime(folder.created_at)}</div>
+                        </div>
+                      )) : (
+                        <p style={{ color: 'var(--text-secondary)' }}>No folders created yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="archive-grid">
+                      {archiveFiles.length > 0 ? archiveFiles.map(file => (
+                        <div key={file.id} className="file-card">
+                          <div className="file-icon">📄</div>
+                          <div className="file-name" title={file.file_name}>{file.file_name}</div>
+                          <div className="file-meta">{(file.file_size / 1024).toFixed(1)} KB</div>
+                          <a 
+                            href={`/api/admin/archive-files/download/${file.id}`} 
+                            download={file.file_name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="download-btn"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      )) : (
+                        <p style={{ color: 'var(--text-secondary)' }}>No files in this folder.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -902,7 +1638,18 @@ export default function AdminDashboardPage() {
 
           {activeTab === 'pending' && (
             <>
-              <h2>⏳ Pending Registrations ({pendingRegistrations.length})</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0 }}>⏳ Pending Registrations ({pendingRegistrations.length})</h2>
+                {pendingRegistrations.length > 0 && (
+                  <button 
+                    className="logout-flux-btn" 
+                    style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                    onClick={handleApproveAllResidents}
+                  >
+                    ✓ Approve All
+                  </button>
+                )}
+              </div>
               {pendingRegistrations.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                   No pending registrations. All applicants have been reviewed.
@@ -1045,7 +1792,33 @@ export default function AdminDashboardPage() {
 
           {activeTab === 'requests' && (
             <>
-              <h2>📄 Certificate Requests</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0 }}>📄 Certificate Requests</h2>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Search name or type..." 
+                    className="flux-input"
+                    value={requestSearchTerm}
+                    onChange={(e) => setRequestSearchTerm(e.target.value)}
+                    style={{ width: '250px' }}
+                  />
+                  <select 
+                    className="flux-select"
+                    value={requestStatusFilter}
+                    onChange={(e) => setRequestStatusFilter(e.target.value)}
+                    style={{ width: '180px' }}
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Verified">Verified</option>
+                    <option value="Not Verified">Not Verified</option>
+                    <option value="Void">Void</option>
+                    <option value="In process">In process</option>
+                    <option value="For Pickup">For Pickup</option>
+                    <option value="Claimed">Claimed</option>
+                  </select>
+                </div>
+              </div>
               {requestLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--accent-purple)' }}>
                   ⏳ Loading requests from database...
@@ -1053,6 +1826,10 @@ export default function AdminDashboardPage() {
               ) : certificateRequests.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                   No certificate requests found in database.
+                </div>
+              ) : filteredRequests.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  No requests match your search or filter.
                 </div>
               ) : (
                 <table className="flux-table">
@@ -1067,7 +1844,7 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {certificateRequests.map(r => (
+                    {filteredRequests.map(r => (
                       <tr key={r.id}>
                         <td>{r.full_name || r.resident_name || 'Resident #' + r.user_id}</td>
                         <td>{r.certificate_type}</td>
@@ -1075,12 +1852,19 @@ export default function AdminDashboardPage() {
                         <td><span className={`status-badge ${r.verification_status === 'Verified' ? 'status-verified' : r.verification_status === 'Not Valid' ? 'status-rejected' : 'status-pending'}`}>{r.verification_status}</span></td>
                         <td><span className={`status-badge ${getProcessStatusClass(r.process_status)}`}>{r.process_status}</span></td>
                         <td>
-                          <button className="logout-flux-btn" onClick={() => {
-                            setSelectedRequest(r)
-                            setEditorContent(r.certificate_content || `Certificate for User #${r.user_id}`)
-                            setEditorVerification(r.verification_status || 'Not Verified')
-                            setEditorProcess(r.process_status || 'In process')
-                          }}>Manage</button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              className="logout-flux-btn" 
+                              style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 'bold' }}
+                              onClick={() => {
+                                setSelectedRequest(r)
+                                setEditorContent(r.certificate_content || 'Official content will be generated here upon verification.\n\nThis certifies that the requested information is true and correct.')
+                                setEditorVerification(r.verification_status || 'Not Verified')
+                                setEditorProcess(r.process_status || 'In process')
+                              }}>
+                              Manage & Edit Document
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1185,37 +1969,82 @@ export default function AdminDashboardPage() {
         </div>
       </main>
 
-      {/* Manage Request Modal */}
+      {/* Unified Manage & Mockup Editor Modal */}
       {selectedRequest && (
-        <div className="flux-modal-overlay">
-          <div className="flux-modal">
-            <div className="modal-header">
+        <div className="flux-modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="flux-modal" style={{ maxWidth: '850px', width: '95%', maxHeight: '95vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ flexShrink: 0 }}>
               <div>
-                <h3>Manage Request #{selectedRequest.id}</h3>
-                <p>Update verification and processing status</p>
+                <h3>Manage Certificate: {selectedRequest.full_name || selectedRequest.resident_name || 'Resident'}</h3>
+                <p>Edit the official document and update status</p>
               </div>
               <button className="close-modal-btn" onClick={() => setSelectedRequest(null)}>✕</button>
             </div>
             
-            <div className="modal-body">
-              <div className="modal-section">
-                <label className="modal-label">Certificate Content</label>
-                <textarea 
-                  className="modal-textarea"
-                  rows={6} 
-                  value={editorContent} 
-                  onChange={(e) => setEditorContent(e.target.value)}
-                  placeholder="Enter the official content for this certificate..."
-                />
+            <div className="modal-body" style={{ padding: '20px', backgroundColor: '#f8fafc', color: '#0f172a', overflowY: 'auto' }}>
+              
+              {/* Formatting Toolbar */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center', background: '#fff', padding: '10px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('bold', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>B</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('italic', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontStyle: 'italic' }}>I</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('underline', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', textDecoration: 'underline' }}>U</button>
+                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>• List</button>
+                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyLeft', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Left</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyCenter', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Center</button>
               </div>
 
-              <div className="modal-row">
-                <div className="modal-section">
-                  <label className="modal-label">Verification Status</label>
+              {/* Certificate Editor Area */}
+              <div style={{ width: '100%', border: '4px double #334155', padding: '50px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                <h1 style={{ fontSize: '28px', marginBottom: '30px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900' }}>
+                  {selectedRequest.certificate_type || 'Barangay Certificate'}
+                </h1>
+                
+                <div style={{ textAlign: 'left', margin: '0 auto 20px', maxWidth: '85%', padding: '15px', backgroundColor: '#f1f5f9', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
+                  <h4 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>To Whom It May Concern:</h4>
+                  <p style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#334155' }}>
+                    This is to certify that <strong style={{ fontSize: '16px', color: '#0f172a', textDecoration: 'underline' }}>{selectedRequest.full_name || selectedRequest.resident_name || 'Resident Name'}</strong>,
+                  </p>
+                  <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>
+                    is a bona fide resident of this Barangay.
+                  </p>
+                </div>
+                
+                <div 
+                  contentEditable
+                  onBlur={(e) => setEditorContent(e.currentTarget.innerHTML)}
+                  dangerouslySetInnerHTML={{ __html: editorContent }}
+                  style={{ 
+                    fontSize: '16px', margin: '20px auto', lineHeight: '2', textAlign: 'justify', color: '#334155', 
+                    outline: 'none', border: '1px dashed #94a3b8', padding: '20px', minHeight: '150px', 
+                    borderRadius: '8px', backgroundColor: '#f8fafc', transition: 'border 0.3s'
+                  }}
+                  title="Click here to type your official document content"
+                />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', alignItems: 'flex-end' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ borderBottom: '2px solid #0f172a', width: '250px', marginBottom: '8px' }}></div>
+                    <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Barangay Captain</p>
+                  </div>
+                  <div style={{ textAlign: 'right', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#64748b' }}>VERIFICATION STATUS</p>
+                    <p style={{ fontSize: '15px', fontWeight: '900', margin: 0, color: editorVerification === 'Verified' ? '#10b981' : (editorVerification === 'Not Valid' ? '#ef4444' : '#f59e0b') }}>
+                      {editorVerification || 'Pending'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Controls */}
+              <div style={{ display: 'flex', gap: '15px', marginTop: '20px', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Verification Status</label>
                   <select 
-                    className="modal-select"
                     value={editorVerification} 
                     onChange={(e) => setEditorVerification(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                   >
                     <option value="Not Verified">Not Verified</option>
                     <option value="Verified">Verified (Valid)</option>
@@ -1223,12 +2052,12 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
                 
-                <div className="modal-section">
-                  <label className="modal-label">Process Status</label>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Process Status</label>
                   <select 
-                    className="modal-select"
                     value={editorProcess} 
                     onChange={(e) => setEditorProcess(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                   >
                     <option value="In process">In process</option>
                     <option value="For Pickup">For Pickup</option>
@@ -1238,30 +2067,39 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <button 
-                className="modal-save-btn"
-                onClick={async () => {
-                  try {
-                    const response = await fetch(`/api/request/${selectedRequest.id}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' }, 
-                      body: JSON.stringify({
-                        verification_status: editorVerification, 
-                        process_status: editorProcess, 
-                        certificate_content: editorContent
+              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button 
+                  onClick={() => setSelectedRequest(null)}
+                  style={{ padding: '12px 24px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/request/${selectedRequest.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({
+                          verification_status: editorVerification, 
+                          process_status: editorProcess, 
+                          certificate_content: editorContent
+                        })
                       })
-                    })
-                    if (response.ok) {
-                      fetchRequests()
-                      setSelectedRequest(null)
+                      if (response.ok) {
+                        fetchRequests()
+                        setSelectedRequest(null)
+                      }
+                    } catch(err) {
+                      console.error('Error saving changes:', err)
                     }
-                  } catch(err) {
-                    console.error('Error saving changes:', err)
-                  }
-                }}
-              >
-                Save Changes
-              </button>
+                  }}
+                  style={{ padding: '12px 24px', borderRadius: '6px', border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Save Document
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
