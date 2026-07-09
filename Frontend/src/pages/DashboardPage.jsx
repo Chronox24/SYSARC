@@ -311,17 +311,33 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 
-                {viewMockupRequest.certificate_content ? (
-                  <div 
-                    style={{ fontSize: '18px', margin: '40px 0', lineHeight: '2', textAlign: 'justify', color: '#334155' }}
-                    dangerouslySetInnerHTML={{ __html: viewMockupRequest.certificate_content }}
-                  />
+                {viewMockupRequest.visible_to_resident === 'pdf' ? (
+                  viewMockupRequest.pdf_file ? (
+                    <div style={{ margin: '40px 0', width: '100%', height: '600px', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
+                      <iframe 
+                        src={viewMockupRequest.pdf_file} 
+                        style={{ width: '100%', height: '100%', border: 'none' }}
+                        title="Certificate PDF"
+                      />
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '18px', margin: '40px 0', color: '#ef4444' }}>
+                      Admin has set the visibility to PDF, but no PDF is attached.
+                    </p>
+                  )
                 ) : (
-                  <p style={{ fontSize: '18px', margin: '40px 0', whiteSpace: 'pre-wrap', lineHeight: '2', textAlign: 'justify', color: '#334155' }}>
-                    Official content will be generated here upon verification by the Barangay.
-                    
-                    This certifies that the requested information is being processed.
-                  </p>
+                  viewMockupRequest.certificate_content ? (
+                    <div 
+                      style={{ fontSize: '18px', margin: '40px 0', lineHeight: '2', textAlign: 'justify', color: '#334155' }}
+                      dangerouslySetInnerHTML={{ __html: viewMockupRequest.certificate_content }}
+                    />
+                  ) : (
+                    <p style={{ fontSize: '18px', margin: '40px 0', whiteSpace: 'pre-wrap', lineHeight: '2', textAlign: 'justify', color: '#334155' }}>
+                      Official content will be generated here upon verification by the Barangay.
+                      
+                      This certifies that the requested information is being processed.
+                    </p>
+                  )
                 )}
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '80px', alignItems: 'flex-end' }}>

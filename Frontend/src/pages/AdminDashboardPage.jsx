@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
+import QRCode from 'qrcode'
 import '../styles/AdminFlux.css'
 
 
@@ -25,6 +26,12 @@ export default function AdminDashboardPage() {
   const [editorContent, setEditorContent] = useState('')
   const [editorVerification, setEditorVerification] = useState('Not Verified')
   const [editorProcess, setEditorProcess] = useState('In process')
+  const [editorPdfFile, setEditorPdfFile] = useState(null)
+  const [removePdf, setRemovePdf] = useState(false)
+  const [existingPdf, setExistingPdf] = useState(null)
+  const [editorMode, setEditorMode] = useState('text')
+  const [visibleToResident, setVisibleToResident] = useState('text')
+  const [qrDataUrl, setQrDataUrl] = useState(null)
   const [viewMockupRequest, setViewMockupRequest] = useState(null)
 
   const [messages, setMessages] = useState([])
@@ -1861,6 +1868,14 @@ export default function AdminDashboardPage() {
                                 setEditorContent(r.certificate_content || 'Official content will be generated here upon verification.\n\nThis certifies that the requested information is true and correct.')
                                 setEditorVerification(r.verification_status || 'Not Verified')
                                 setEditorProcess(r.process_status || 'In process')
+                                setEditorPdfFile(null)
+                                setRemovePdf(false)
+                                setExistingPdf(r.pdf_file || null)
+                                setEditorMode(r.pdf_file ? 'pdf' : 'text')
+                                setVisibleToResident(r.visible_to_resident || 'text')
+                                QRCode.toDataURL(`https://barangay830.local/verify/${r.id}`, { width: 100, margin: 1 })
+                                  .then(url => setQrDataUrl(url))
+                                  .catch(err => console.error(err))
                               }}>
                               Manage & Edit Document
                             </button>
@@ -1983,59 +1998,138 @@ export default function AdminDashboardPage() {
             
             <div className="modal-body" style={{ padding: '20px', backgroundColor: '#f8fafc', color: '#0f172a', overflowY: 'auto' }}>
               
-              {/* Formatting Toolbar */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center', background: '#fff', padding: '10px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('bold', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>B</button>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('italic', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontStyle: 'italic' }}>I</button>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('underline', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', textDecoration: 'underline' }}>U</button>
-                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>• List</button>
-                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyLeft', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Left</button>
-                <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyCenter', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Center</button>
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+                <button 
+                  onClick={() => { setEditorMode('text'); setRemovePdf(true); }}
+                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: editorMode === 'text' ? '2px solid #3b82f6' : '1px solid #cbd5e1', background: editorMode === 'text' ? '#eff6ff' : '#fff', fontWeight: 'bold', color: editorMode === 'text' ? '#3b82f6' : '#64748b', cursor: 'pointer' }}>
+                  Use Built-in Editor
+                </button>
+                <button 
+                  onClick={() => { setEditorMode('pdf'); setRemovePdf(false); }}
+                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: editorMode === 'pdf' ? '2px solid #3b82f6' : '1px solid #cbd5e1', background: editorMode === 'pdf' ? '#eff6ff' : '#fff', fontWeight: 'bold', color: editorMode === 'pdf' ? '#3b82f6' : '#64748b', cursor: 'pointer' }}>
+                  Attach PDF File
+                </button>
               </div>
 
-              {/* Certificate Editor Area */}
-              <div style={{ width: '100%', border: '4px double #334155', padding: '50px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-                <h1 style={{ fontSize: '28px', marginBottom: '30px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900' }}>
-                  {selectedRequest.certificate_type || 'Barangay Certificate'}
-                </h1>
-                
-                <div style={{ textAlign: 'left', margin: '0 auto 20px', maxWidth: '85%', padding: '15px', backgroundColor: '#f1f5f9', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
-                  <h4 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>To Whom It May Concern:</h4>
-                  <p style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#334155' }}>
-                    This is to certify that <strong style={{ fontSize: '16px', color: '#0f172a', textDecoration: 'underline' }}>{selectedRequest.full_name || selectedRequest.resident_name || 'Resident Name'}</strong>,
-                  </p>
-                  <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>
-                    is a bona fide resident of this Barangay.
-                  </p>
+              {/* Resident Visibility Setting */}
+              <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '15px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 5px 0', color: '#0f172a' }}>Resident Visibility</h4>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Choose which file version the resident will see on their dashboard.</p>
                 </div>
-                
-                <div 
-                  contentEditable
-                  onBlur={(e) => setEditorContent(e.currentTarget.innerHTML)}
-                  dangerouslySetInnerHTML={{ __html: editorContent }}
-                  style={{ 
-                    fontSize: '16px', margin: '20px auto', lineHeight: '2', textAlign: 'justify', color: '#334155', 
-                    outline: 'none', border: '1px dashed #94a3b8', padding: '20px', minHeight: '150px', 
-                    borderRadius: '8px', backgroundColor: '#f8fafc', transition: 'border 0.3s'
-                  }}
-                  title="Click here to type your official document content"
-                />
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', alignItems: 'flex-end' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ borderBottom: '2px solid #0f172a', width: '250px', marginBottom: '8px' }}></div>
-                    <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Barangay Captain</p>
-                  </div>
-                  <div style={{ textAlign: 'right', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                    <p style={{ fontSize: '11px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#64748b' }}>VERIFICATION STATUS</p>
-                    <p style={{ fontSize: '15px', fontWeight: '900', margin: 0, color: editorVerification === 'Verified' ? '#10b981' : (editorVerification === 'Not Valid' ? '#ef4444' : '#f59e0b') }}>
-                      {editorVerification || 'Pending'}
-                    </p>
-                  </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="visibility" 
+                      checked={visibleToResident === 'text'} 
+                      onChange={() => setVisibleToResident('text')} 
+                    />
+                    <span style={{ fontWeight: visibleToResident === 'text' ? 'bold' : 'normal', color: visibleToResident === 'text' ? '#0f172a' : '#64748b' }}>Built-in Editor Text</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="visibility" 
+                      checked={visibleToResident === 'pdf'} 
+                      onChange={() => setVisibleToResident('pdf')} 
+                    />
+                    <span style={{ fontWeight: visibleToResident === 'pdf' ? 'bold' : 'normal', color: visibleToResident === 'pdf' ? '#0f172a' : '#64748b' }}>Attached PDF</span>
+                  </label>
                 </div>
               </div>
+
+              {editorMode === 'text' ? (
+                <>
+                  {/* Formatting Toolbar */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center', background: '#fff', padding: '10px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('bold', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>B</button>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('italic', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontStyle: 'italic' }}>I</button>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('underline', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', textDecoration: 'underline' }}>U</button>
+                    <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>• List</button>
+                    <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyLeft', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Left</button>
+                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyCenter', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Center</button>
+                  </div>
+
+                  {/* Certificate Editor Area */}
+                  <div style={{ width: '100%', border: '4px double #334155', padding: '50px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                    
+                    {/* Persistent QR Code in top right */}
+                    {qrDataUrl && (
+                      <div style={{ position: 'absolute', top: '20px', right: '20px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff' }}>
+                        <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
+                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>VERIFY</div>
+                      </div>
+                    )}
+
+                    <h1 style={{ fontSize: '28px', marginBottom: '30px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900' }}>
+                      {selectedRequest.certificate_type || 'Barangay Certificate'}
+                    </h1>
+                    
+                    <div style={{ textAlign: 'left', margin: '0 auto 20px', maxWidth: '85%', padding: '15px', backgroundColor: '#f1f5f9', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
+                      <h4 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>To Whom It May Concern:</h4>
+                      <p style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#334155' }}>
+                        This is to certify that <strong style={{ fontSize: '16px', color: '#0f172a', textDecoration: 'underline' }}>{selectedRequest.full_name || selectedRequest.resident_name || 'Resident Name'}</strong>,
+                      </p>
+                      <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>
+                        is a bona fide resident of this Barangay.
+                      </p>
+                    </div>
+                    
+                    <div 
+                      contentEditable
+                      onBlur={(e) => setEditorContent(e.currentTarget.innerHTML)}
+                      dangerouslySetInnerHTML={{ __html: editorContent }}
+                      style={{ 
+                        fontSize: '16px', margin: '20px auto', lineHeight: '2', textAlign: 'justify', color: '#334155', 
+                        outline: 'none', border: '1px dashed #94a3b8', padding: '20px', minHeight: '150px', 
+                        borderRadius: '8px', backgroundColor: '#f8fafc', transition: 'border 0.3s'
+                      }}
+                      title="Click here to type your official document content"
+                    />
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', alignItems: 'flex-end' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ borderBottom: '2px solid #0f172a', width: '250px', marginBottom: '8px' }}></div>
+                        <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Barangay Captain</p>
+                      </div>
+                      <div style={{ textAlign: 'right', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#64748b' }}>VERIFICATION STATUS</p>
+                        <p style={{ fontSize: '15px', fontWeight: '900', margin: 0, color: editorVerification === 'Verified' ? '#10b981' : (editorVerification === 'Not Valid' ? '#ef4444' : '#f59e0b') }}>
+                          {editorVerification || 'Pending'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  <h3 style={{ color: '#0f172a', marginBottom: '15px' }}>Attach PDF Document</h3>
+                  <input 
+                    type="file" 
+                    accept="application/pdf"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        setEditorPdfFile(e.target.files[0]);
+                        setRemovePdf(false);
+                      }
+                    }}
+                    style={{ marginBottom: '20px' }}
+                  />
+                  {editorPdfFile ? (
+                    <div style={{ color: '#10b981', fontWeight: 'bold' }}>✅ File selected: {editorPdfFile.name}</div>
+                  ) : existingPdf && !removePdf ? (
+                    <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
+                      <p>✅ Current PDF is attached.</p>
+                      <a href={existingPdf} download="certificate.pdf" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '10px', padding: '8px 16px', background: '#3b82f6', color: '#fff', textDecoration: 'none', borderRadius: '4px' }}>View / Download PDF</a>
+                    </div>
+                  ) : (
+                    <div style={{ color: '#64748b' }}>No file selected. Please choose a PDF file.</div>
+                  )}
+                </div>
+              )}
 
               {/* Status Controls */}
               <div style={{ display: 'flex', gap: '15px', marginTop: '20px', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
@@ -2077,15 +2171,23 @@ export default function AdminDashboardPage() {
                 <button 
                   onClick={async () => {
                     try {
+                      const formData = new FormData();
+                      formData.append('verification_status', editorVerification);
+                      formData.append('process_status', editorProcess);
+                      formData.append('certificate_content', editorContent);
+                      formData.append('visible_to_resident', visibleToResident);
+                      if (editorPdfFile) {
+                        formData.append('pdf_file', editorPdfFile);
+                      }
+                      if (removePdf) {
+                        formData.append('remove_pdf', 'true');
+                      }
+                      
                       const response = await fetch(`/api/request/${selectedRequest.id}`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({
-                          verification_status: editorVerification, 
-                          process_status: editorProcess, 
-                          certificate_content: editorContent
-                        })
-                      })
+                        body: formData
+                      });
+                      
                       if (response.ok) {
                         fetchRequests()
                         setSelectedRequest(null)

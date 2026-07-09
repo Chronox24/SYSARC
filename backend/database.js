@@ -440,7 +440,21 @@ app.get("/api/dashboard/:userId", async (req, res) => {
         const connection = await pool.getConnection();
         try {
             const [rows] = await connection.execute(`SELECT cr.*, r.full_name, r.email FROM certificate_requests cr JOIN residents r ON cr.user_id = r.id WHERE r.id = ? ORDER BY cr.created_at DESC`, [userId]);
-            res.json(rows || []);
+            const processedRows = rows.map(request => {
+                let pdfFileStr = null;
+                if (request.pdf_file) {
+                    if (Buffer.isBuffer(request.pdf_file)) {
+                        pdfFileStr = `data:application/pdf;base64,${request.pdf_file.toString('base64')}`;
+                    } else {
+                        pdfFileStr = request.pdf_file;
+                    }
+                }
+                return {
+                    ...request,
+                    pdf_file: pdfFileStr
+                };
+            });
+            res.json(processedRows || []);
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -573,8 +587,15 @@ app.get("/api/all-requests", async (req, res) => {
             // Map the resident details if they exist
             const processedRows = await Promise.all(rows.map(async (request) => {
                 const [residents] = await connection.execute("SELECT full_name, email FROM residents WHERE id = ?", [request.user_id]);
+                
+                let pdfFileStr = null;
+                if (request.pdf_file) {
+                    pdfFileStr = `data:application/pdf;base64,${request.pdf_file.toString('base64')}`;
+                }
+                
                 return {
                     ...request,
+                    pdf_file: pdfFileStr,
                     resident_name: residents.length > 0 ? residents[0].full_name : "Unknown Resident",
                     resident_email: residents.length > 0 ? residents[0].email : "N/A"
                 };
@@ -590,13 +611,26 @@ app.get("/api/all-requests", async (req, res) => {
     }
 });
 
-app.put("/api/request/:id", async (req, res) => {
+app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
     try {
         const { id } = req.params;
-        const { verification_status, process_status, certificate_content } = req.body;
+        const { verification_status, process_status, certificate_content, remove_pdf, visible_to_resident } = req.body;
         const connection = await pool.getConnection();
         try {
-            await connection.execute("UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=? WHERE id=?", [verification_status, process_status, certificate_content || null, id]);
+            let updateQuery = "UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=?, visible_to_resident=?";
+            let queryParams = [verification_status, process_status, certificate_content || null, visible_to_resident || 'text'];
+
+            if (req.file) {
+                updateQuery += ", pdf_file=?";
+                queryParams.push(req.file.buffer);
+            } else if (remove_pdf === 'true') {
+                updateQuery += ", pdf_file=NULL";
+            }
+            
+            updateQuery += " WHERE id=?";
+            queryParams.push(id);
+
+            await connection.execute(updateQuery, queryParams);
             res.json({ message: "Request updated successfully" });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
