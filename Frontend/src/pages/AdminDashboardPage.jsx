@@ -190,7 +190,7 @@ export default function AdminDashboardPage() {
 
   const pendingRegCount = pendingRegistrations.length;
   const pendingUpdCount = pendingUpdates.length;
-  const activeRequestsCount = Array.isArray(certificateRequests) ? certificateRequests.filter(r => r.process_status === 'In process').length : 0;
+  const totalRequestsCount = Array.isArray(certificateRequests) ? certificateRequests.length : 0;
   const unreadMessagesCount = Array.isArray(conversations) ? conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0) : 0;
 
   useEffect(() => {
@@ -200,7 +200,7 @@ export default function AdminDashboardPage() {
     // Trigger notification if counts increased since last check
     if (pendingRegCount > prev.pendingReg) newNotifs.push(`New pending registration received!`);
     if (pendingUpdCount > prev.pendingUpd) newNotifs.push(`New profile update request!`);
-    if (activeRequestsCount > prev.requests) newNotifs.push(`New certificate request!`);
+    if (totalRequestsCount > prev.requests) newNotifs.push(`New certificate request!`);
     if (unreadMessagesCount > prev.messages) newNotifs.push(`New unread message!`);
 
     if (newNotifs.length > 0) {
@@ -218,10 +218,10 @@ export default function AdminDashboardPage() {
     prevCountsRef.current = {
       pendingReg: pendingRegCount,
       pendingUpd: pendingUpdCount,
-      requests: activeRequestsCount,
+      requests: totalRequestsCount,
       messages: unreadMessagesCount
     };
-  }, [pendingRegCount, pendingUpdCount, activeRequestsCount, unreadMessagesCount]);
+  }, [pendingRegCount, pendingUpdCount, totalRequestsCount, unreadMessagesCount]);
 
   const fetchConversations = async () => {
     try {
@@ -819,7 +819,7 @@ export default function AdminDashboardPage() {
           <button className={`nav-item ${activeTab === 'requests' ? 'active' : ''}`} onClick={() => setActiveTab('requests')}>
             <span className="nav-icon">📜</span>
             <span className="nav-label" style={{ flex: 1 }}>Requests</span>
-            {activeRequestsCount > 0 && <span className="unread-badge">{activeRequestsCount}</span>}
+            {totalRequestsCount > 0 && <span className="unread-badge">{totalRequestsCount}</span>}
           </button>
           <button className={`nav-item ${activeTab === 'archived' ? 'active' : ''}`} onClick={() => setActiveTab('archived')}>
             <span className="nav-icon">🗄️</span>
@@ -936,8 +936,8 @@ export default function AdminDashboardPage() {
             <div className="stat-card requests">
               <div className="stat-icon">📜</div>
               <div>
-                <span className="stat-label">Active Requests</span>
-                <span className="stat-value">{activeRequestsCount}</span>
+                <span className="stat-label">Total Requests</span>
+                <span className="stat-value">{totalRequestsCount}</span>
               </div>
               <div className="stat-trend trend-down">
                 <span>↓ 5%</span>
