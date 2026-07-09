@@ -2107,23 +2107,53 @@ export default function AdminDashboardPage() {
               ) : (
                 <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <h3 style={{ color: '#0f172a', marginBottom: '15px' }}>Attach PDF Document</h3>
-                  <input 
-                    type="file" 
-                    accept="application/pdf"
-                    onChange={(e) => {
-                      if (e.target.files[0]) {
-                        setEditorPdfFile(e.target.files[0]);
-                        setRemovePdf(false);
-                      }
-                    }}
-                    style={{ marginBottom: '20px' }}
-                  />
+                  
+                  {(!editorPdfFile && (!existingPdf || removePdf)) && (
+                    <input 
+                      type="file" 
+                      accept="application/pdf"
+                      onChange={(e) => {
+                        if (e.target.files[0]) {
+                          setEditorPdfFile(e.target.files[0]);
+                          setRemovePdf(false);
+                        }
+                      }}
+                      style={{ marginBottom: '20px' }}
+                    />
+                  )}
+
                   {editorPdfFile ? (
-                    <div style={{ color: '#10b981', fontWeight: 'bold' }}>✅ File selected: {editorPdfFile.name}</div>
+                    <div style={{ marginTop: '20px' }}>
+                      <div style={{ color: '#10b981', fontWeight: 'bold', marginBottom: '10px' }}>✅ New File selected: {editorPdfFile.name}</div>
+                      <iframe 
+                        src={URL.createObjectURL(editorPdfFile)} 
+                        style={{ width: '100%', height: '500px', border: '1px solid #cbd5e1', borderRadius: '8px', marginBottom: '15px' }}
+                        title="PDF Preview"
+                      />
+                      <button 
+                        onClick={() => setEditorPdfFile(null)}
+                        style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Cancel / Choose Different File
+                      </button>
+                    </div>
                   ) : existingPdf && !removePdf ? (
-                    <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
-                      <p>✅ Current PDF is attached.</p>
-                      <a href={existingPdf} download="certificate.pdf" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '10px', padding: '8px 16px', background: '#3b82f6', color: '#fff', textDecoration: 'none', borderRadius: '4px' }}>View / Download PDF</a>
+                    <div style={{ marginTop: '20px' }}>
+                      <div style={{ color: '#3b82f6', fontWeight: 'bold', marginBottom: '10px' }}>✅ Current PDF is attached.</div>
+                      <iframe 
+                        src={existingPdf} 
+                        style={{ width: '100%', height: '500px', border: '1px solid #cbd5e1', borderRadius: '8px', marginBottom: '15px' }}
+                        title="PDF Preview"
+                      />
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                        <a href={existingPdf} download="certificate.pdf" target="_blank" rel="noreferrer" style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', textDecoration: 'none', borderRadius: '4px' }}>Download PDF</a>
+                        <button 
+                          onClick={() => setRemovePdf(true)}
+                          style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          Replace File
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div style={{ color: '#64748b' }}>No file selected. Please choose a PDF file.</div>

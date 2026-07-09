@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import QRCode from 'qrcode'
 import '../styles/Dashboard.css'
 
 export default function DashboardPage() {
@@ -12,6 +13,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [viewMockupRequest, setViewMockupRequest] = useState(null)
+  const [qrDataUrl, setQrDataUrl] = useState(null)
   
   const messagesEndRef = useRef(null)
 
@@ -48,6 +50,66 @@ export default function DashboardPage() {
       navigate('/login')
     }
   }, [navigate])
+
+  // Anti-screenshot and security logic
+  useEffect(() => {
+    if (!viewMockupRequest) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    QRCode.toDataURL(`https://barangay830.local/verify/${viewMockupRequest.id}`, { width: 100, margin: 1 })
+      .then(url => setQrDataUrl(url))
+      .catch(err => console.error(err));
+
+    const handleKeyDown = (e) => {
+      // Block PrintScreen, Ctrl+P, Mac screenshot shortcuts, and Snip
+      if (
+        e.key === 'PrintScreen' ||
+        (e.ctrlKey && e.key === 'p') ||
+        (e.ctrlKey && e.key === 's') ||
+        (e.metaKey && e.shiftKey) ||
+        (e.metaKey && e.key === 'p') ||
+        (e.metaKey && e.key === 's')
+      ) {
+        e.preventDefault();
+        alert('Screenshots and printing are disabled for security purposes.');
+      }
+    };
+
+    const handleContextMenu = (e) => e.preventDefault();
+    const handleCopy = (e) => e.preventDefault();
+
+    const handleBlur = () => {
+      const container = document.getElementById('secure-mockup-container');
+      if (container) {
+        container.style.filter = 'blur(25px)';
+        container.style.opacity = '0.3';
+      }
+    };
+
+    const handleFocus = () => {
+      const container = document.getElementById('secure-mockup-container');
+      if (container) {
+        container.style.filter = 'none';
+        container.style.opacity = '1';
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [viewMockupRequest]);
 
   const fetchUserData = async (userId) => {
     try {
@@ -296,8 +358,58 @@ export default function DashboardPage() {
             </div>
             
             <div style={{ padding: '40px', backgroundColor: '#f8fafc', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ width: '100%', border: '4px double #334155', padding: '60px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-                <h1 style={{ fontSize: '32px', marginBottom: '40px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900' }}>
+              <style>
+                {`
+                  @media print {
+                    #secure-mockup-container {
+                      display: none !important;
+                    }
+                    body {
+                      display: none !important;
+                    }
+                  }
+                  .watermark-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    background-image: repeating-linear-gradient(45deg, transparent, transparent 150px, rgba(15, 23, 42, 0.03) 150px, rgba(15, 23, 42, 0.03) 300px);
+                    z-index: 50;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                  }
+                  .watermark-text {
+                    font-size: 80px;
+                    color: rgba(239, 68, 68, 0.08);
+                    transform: rotate(-45deg);
+                    font-weight: 900;
+                    white-space: nowrap;
+                    text-transform: uppercase;
+                    letter-spacing: 5px;
+                  }
+                `}
+              </style>
+              <div 
+                id="secure-mockup-container"
+                style={{ width: '100%', border: '4px double #334155', padding: '60px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', userSelect: 'none', transition: 'filter 0.1s, opacity 0.1s' }}
+              >
+                <div className="watermark-overlay">
+                  <div className="watermark-text">UNAUTHORIZED COPY<br/>PREVIEW ONLY</div>
+                </div>
+                
+                {/* Persistent QR Code in top right */}
+                {qrDataUrl && (
+                  <div style={{ position: 'absolute', top: '40px', right: '40px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff', zIndex: 10 }}>
+                    <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
+                    <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
+                  </div>
+                )}
+                
+                <h1 style={{ fontSize: '32px', marginBottom: '40px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900', position: 'relative', zIndex: 2 }}>
                   {viewMockupRequest.certificate_type || 'Barangay Certificate'}
                 </h1>
                 
