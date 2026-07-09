@@ -2162,13 +2162,33 @@ export default function AdminDashboardPage() {
               )}
 
               {/* Status Controls */}
-              <div style={{ display: 'flex', gap: '15px', marginTop: '20px', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', gap: '20px', marginTop: '20px', padding: '24px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Verification Status</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Verification Status</label>
                   <select 
                     value={editorVerification} 
                     onChange={(e) => setEditorVerification(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '12px 16px', 
+                      borderRadius: '8px', 
+                      border: '1px solid #cbd5e1', 
+                      backgroundColor: '#f8fafc', 
+                      color: '#0f172a', 
+                      fontSize: '15px', 
+                      fontWeight: '600', 
+                      outline: 'none', 
+                      cursor: 'pointer', 
+                      appearance: 'none', 
+                      backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
+                      backgroundRepeat: 'no-repeat', 
+                      backgroundPosition: 'right 16px center', 
+                      backgroundSize: '16px', 
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
+                      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; e.target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'; }}
                   >
                     <option value="Not Verified">Not Verified</option>
                     <option value="Verified">Verified (Valid)</option>
@@ -2177,11 +2197,31 @@ export default function AdminDashboardPage() {
                 </div>
                 
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Process Status</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Process Status</label>
                   <select 
                     value={editorProcess} 
                     onChange={(e) => setEditorProcess(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '12px 16px', 
+                      borderRadius: '8px', 
+                      border: '1px solid #cbd5e1', 
+                      backgroundColor: '#f8fafc', 
+                      color: '#0f172a', 
+                      fontSize: '15px', 
+                      fontWeight: '600', 
+                      outline: 'none', 
+                      cursor: 'pointer', 
+                      appearance: 'none', 
+                      backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
+                      backgroundRepeat: 'no-repeat', 
+                      backgroundPosition: 'right 16px center', 
+                      backgroundSize: '16px', 
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
+                      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; e.target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'; }}
                   >
                     <option value="In process">In process</option>
                     <option value="For Pickup">For Pickup</option>
