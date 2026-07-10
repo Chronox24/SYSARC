@@ -32,7 +32,6 @@ export default function AdminDashboardPage() {
   const [editorMode, setEditorMode] = useState('text')
   const [visibleToResident, setVisibleToResident] = useState('text')
   const [qrDataUrl, setQrDataUrl] = useState(null)
-  const [viewMockupRequest, setViewMockupRequest] = useState(null)
 
   const [messages, setMessages] = useState([])
   const [conversations, setConversations] = useState([])
@@ -291,7 +290,7 @@ export default function AdminDashboardPage() {
         month: 'short',
         day: 'numeric'
       });
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
@@ -309,7 +308,7 @@ export default function AdminDashboardPage() {
         minute: '2-digit',
         hour12: true
       });
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
@@ -774,18 +773,6 @@ export default function AdminDashboardPage() {
     const emailMatch = account?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || false
     return nameMatch || emailMatch
   })
-
-  const archivedAccountsByPeriod = filteredArchivedAccounts.reduce((groups, account) => {
-    const timestamp = account.archived_at || account.created_at || ''
-    const date = timestamp ? new Date(timestamp) : null
-    const monthYear = date && !isNaN(date.getTime())
-      ? date.toLocaleString('en-US', { month: 'long', year: 'numeric' })
-      : 'Unknown period'
-
-    if (!groups[monthYear]) groups[monthYear] = []
-    groups[monthYear].push(account)
-    return groups
-  }, {})
 
   return (
     <div className="admin-layout">
