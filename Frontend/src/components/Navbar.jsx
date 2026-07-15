@@ -4,13 +4,14 @@ import "../styles/Navbar.css"
 
 export default function Navbar() {
   const [user, setUser] = useState(null)
-  const [theme, setTheme] = useState('light')
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light')
   const navigate = useNavigate()
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem('theme') || 'light'
-    setTheme(storedTheme)
-    document.documentElement.dataset.theme = storedTheme
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  useEffect(() => {
 
     const checkUser = () => {
       const storedUser = localStorage.getItem("currentUser")

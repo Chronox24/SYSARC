@@ -58,7 +58,7 @@ export default function AdminLoginPage() {
       window.dispatchEvent(new Event('adminLoggedIn'))
       
       navigate('/admin-dashboard')
-    } catch (err) {
+    } catch {
       setError('Login failed. Please check if the server is running.')
     } finally {
       setLoading(false)
