@@ -4,6 +4,19 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import QRCode from 'qrcode'
 import '../styles/AdminFlux.css'
 
+const DocumentEditor = React.memo(({ initialContent, requestId, onChange }) => {
+  return (
+    <div
+      contentEditable
+      suppressContentEditableWarning
+      dangerouslySetInnerHTML={{ __html: initialContent }}
+      onInput={(e) => onChange(e.currentTarget.innerHTML)}
+      style={{ outline: 'none', minHeight: '600px', transition: 'border 0.3s' }}
+      title="Click here to type your official document content"
+    />
+  );
+}, (prevProps, nextProps) => prevProps.requestId === nextProps.requestId);
+
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
@@ -18,6 +31,10 @@ export default function AdminDashboardPage() {
   const [sortOrder, setSortOrder] = useState('newest')
   const [requestSearchTerm, setRequestSearchTerm] = useState('')
   const [requestStatusFilter, setRequestStatusFilter] = useState('All')
+  const [pendingRegSearchTerm, setPendingRegSearchTerm] = useState('')
+  const [pendingUpdSearchTerm, setPendingUpdSearchTerm] = useState('')
+  const [pendingRegSortOrder, setPendingRegSortOrder] = useState('newest')
+  const [pendingUpdSortOrder, setPendingUpdSortOrder] = useState('newest')
   const [selectedResident, setSelectedResident] = useState(null)
   const [pendingRegistrations, setPendingRegistrations] = useState([])
   const [pendingUpdates, setPendingUpdates] = useState([])
@@ -773,6 +790,38 @@ export default function AdminDashboardPage() {
     const emailMatch = account?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || false
     return nameMatch || emailMatch
   })
+
+  const filteredPendingRegistrations = (Array.isArray(pendingRegistrations) ? pendingRegistrations : []).filter(resident => {
+    const searchLower = pendingRegSearchTerm.toLowerCase();
+    const nameMatch = resident?.full_name?.toLowerCase().includes(searchLower) || false;
+    const emailMatch = resident?.email?.toLowerCase().includes(searchLower) || false;
+    const genderMatch = resident?.gender?.toLowerCase().includes(searchLower) || false;
+    const ageMatch = resident?.age?.toString().includes(searchLower) || false;
+    return nameMatch || emailMatch || genderMatch || ageMatch;
+  }).sort((a, b) => {
+    if (pendingRegSortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (pendingRegSortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    if (pendingRegSortOrder === 'nameAsc') return (a.full_name || '').localeCompare(b.full_name || '');
+    if (pendingRegSortOrder === 'nameDesc') return (b.full_name || '').localeCompare(a.full_name || '');
+    return 0;
+  });
+
+  const filteredPendingUpdates = (Array.isArray(pendingUpdates) ? pendingUpdates : []).filter(update => {
+    const searchLower = pendingUpdSearchTerm.toLowerCase();
+    const currentNameMatch = update?.current_name?.toLowerCase().includes(searchLower) || false;
+    const emailMatch = update?.resident_email?.toLowerCase().includes(searchLower) || false;
+    const requestedNameMatch = update?.full_name?.toLowerCase().includes(searchLower) || false;
+    const nicknameMatch = update?.nickname?.toLowerCase().includes(searchLower) || false;
+    const addressMatch = update?.home_address?.toLowerCase().includes(searchLower) || false;
+    const phoneMatch = update?.mobile_phone?.toLowerCase().includes(searchLower) || false;
+    return currentNameMatch || emailMatch || requestedNameMatch || nicknameMatch || addressMatch || phoneMatch;
+  }).sort((a, b) => {
+    if (pendingUpdSortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (pendingUpdSortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    if (pendingUpdSortOrder === 'nameAsc') return (a.current_name || '').localeCompare(b.current_name || '');
+    if (pendingUpdSortOrder === 'nameDesc') return (b.current_name || '').localeCompare(a.current_name || '');
+    return 0;
+  });
 
   return (
     <div className="admin-layout">
@@ -1632,8 +1681,32 @@ export default function AdminDashboardPage() {
 
           {activeTab === 'pending' && (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ margin: 0 }}>⏳ Pending Registrations ({pendingRegistrations.length})</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                  <h2 style={{ margin: 0 }}>⏳ Pending Registrations ({filteredPendingRegistrations.length})</h2>
+                  <input 
+                    type="text" 
+                    placeholder="Search name, email..." 
+                    className="flux-input"
+                    value={pendingRegSearchTerm}
+                    onChange={(e) => setPendingRegSearchTerm(e.target.value)}
+                    style={{ width: '250px' }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Sort By:</label>
+                    <select 
+                      className="flux-select"
+                      value={pendingRegSortOrder}
+                      onChange={(e) => setPendingRegSortOrder(e.target.value)}
+                      style={{ width: '160px' }}
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="nameAsc">Name (A-Z)</option>
+                      <option value="nameDesc">Name (Z-A)</option>
+                    </select>
+                  </div>
+                </div>
                 {pendingRegistrations.length > 0 && (
                   <button 
                     className="logout-flux-btn" 
@@ -1647,6 +1720,10 @@ export default function AdminDashboardPage() {
               {pendingRegistrations.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                   No pending registrations. All applicants have been reviewed.
+                </div>
+              ) : filteredPendingRegistrations.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  No matching pending registrations found.
                 </div>
               ) : (
                 <table className="flux-table">
@@ -1662,7 +1739,7 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingRegistrations.map(resident => (
+                    {filteredPendingRegistrations.map(resident => (
                       <tr key={resident.id}>
                         <td>
                           <div className="admin-photo-cell">
@@ -1711,10 +1788,40 @@ export default function AdminDashboardPage() {
 
           {activeTab === 'updates' && (
             <>
-              <h2>🔄 Pending Profile Updates ({pendingUpdates.length})</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px', flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0 }}>🔄 Pending Profile Updates ({filteredPendingUpdates.length})</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Search resident, changes..." 
+                    className="flux-input"
+                    value={pendingUpdSearchTerm}
+                    onChange={(e) => setPendingUpdSearchTerm(e.target.value)}
+                    style={{ width: '250px' }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Sort By:</label>
+                    <select 
+                      className="flux-select"
+                      value={pendingUpdSortOrder}
+                      onChange={(e) => setPendingUpdSortOrder(e.target.value)}
+                      style={{ width: '160px' }}
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="nameAsc">Name (A-Z)</option>
+                      <option value="nameDesc">Name (Z-A)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
               {pendingUpdates.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                   No pending profile update requests.
+                </div>
+              ) : filteredPendingUpdates.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  No matching pending profile update requests found.
                 </div>
               ) : (
                 <table className="flux-table">
@@ -1727,7 +1834,7 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingUpdates.map(update => (
+                    {filteredPendingUpdates.map(update => (
                       <tr key={update.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1852,7 +1959,169 @@ export default function AdminDashboardPage() {
                               style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 'bold' }}
                               onClick={() => {
                                 setSelectedRequest(r)
-                                setEditorContent(r.certificate_content || 'Official content will be generated here upon verification.\n\nThis certifies that the requested information is true and correct.')
+                                setEditorContent(r.certificate_content || `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+                                  <!-- PAGE 1 -->
+                                  <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+                                    <!-- Header -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 20px;">
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
+                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                      </div>
+                                      <div style="flex: 1; text-align: center;">
+                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
+                                        </div>
+                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
+                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
+                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
+                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
+                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
+                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
+                                      </div>
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
+                                        BAGONG PILIPINAS
+                                      </div>
+                                    </div>
+
+                                    <!-- Main Body Container -->
+                                    <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+                                      
+                                      <!-- Left Sidebar -->
+                                      <div style="width: 220px; background-color: #9bbcc4; padding: 30px 15px; border-right: 1px solid #000; text-align: center;">
+                                        <h3 style="margin: 0 0 30px 0; font-size: 16px;">Barangay 830,<br/>Zone 90 Dist VI</h3>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">BRGY Chairman</h4>
+                                        <p style="margin: 0 0 20px 0; font-size: 12px; font-weight: bold;">EFREN V. MEDINA</p>
+                                        
+                                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #d32f2f;">BARANGAY<br/>KAGAWAD</h4>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Mercedita O. Lacson</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Catherine S. Gabriel</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Jordan T. Lumanao</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Purisima P. Albasin</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Elnora C. Gamit</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Lady P. Abad</p>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Annabelle S. Cagat</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SK CHAIRMAN</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Wilton John B. Padlan</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SECRETARY</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Jonathan C. Florencio Jr.</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">TREASURER</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Dina J. Pedenes</p>
+                                      </div>
+
+                                      <!-- Right Content -->
+                                      <div style="flex: 1; padding: 40px 30px; text-align: left; display: flex; flex-direction: column;">
+                                        <div>
+                                          <p style="margin: 0 0 30px 0; font-size: 14px; font-weight: bold;">Control No: <span style="text-decoration: underline;">BC-${new Date().getFullYear()}-______</span></p>
+                                          
+                                          <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">BARANGAY CERTIFICATE</h2>
+                                          <p style="text-align: center; margin: 0 0 30px 0; font-size: 14px;">(First Time Jobseekers Assistance Act-RA 11261)</p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
+                                            This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified avail of RA 11261 or the <strong><em>First Time Jobseekers Act of 2019.</em></strong>
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
+                                            I further certify that the holder/bearer was informed of his/her rights, including the duties and responsibilities accorded by RA 11261 through the Oath of Undertaking he/she has signed and executed in the presence of our Barangay Official.
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
+                                            Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong> in the City of Manila.
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
+                                            This certification is valid only for one (1) year from the issuance.
+                                          </p>
+                                        </div>
+                                        
+                                        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 30px;">
+                                          <div>
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">ALBASIN</p>
+                                          </div>
+                                          <div style="width: 250px;">
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
+                                            <p style="margin: 0 0 25px 0; font-size: 14px;">Punong Barangay</p>
+                                            
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                            <p style="margin: 0 0 45px 0; font-size: 14px;">Date</p>
+
+                                            <div style="padding-left: 50px;">
+                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P.</p>
+                                              <p style="margin: 0 0 25px 0; font-size: 14px;">Kagawad</p>
+                                              
+                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <!-- PAGE 2: OATH OF UNDERTAKING -->
+                                  <div style="padding-top: 50px; min-height: 1050px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 0 20px;">
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
+                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                      </div>
+                                      <div style="flex: 1; text-align: center;">
+                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
+                                        </div>
+                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
+                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
+                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
+                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
+                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
+                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
+                                      </div>
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
+                                        BAGONG PILIPINAS
+                                      </div>
+                                    </div>
+                                    
+                                    <div style="border-bottom: 4px solid #000; margin-bottom: 2px;"></div>
+                                    <div style="border-bottom: 1px solid #000; margin-bottom: 40px;"></div>
+
+                                    <h2 style="text-align: center; margin: 0 0 40px 0; font-size: 20px;">OATH OF UNDERTAKING</h2>
+                                    
+                                    <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
+                                      This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified and is availing the benefits of Republic Act 11261, otherwise known as the First Time Jobseekers Act of 2019, do hereby declare, agree, and undertake to abide and be bound by the following:
+                                    </p>
+
+                                    <ol style="font-size: 14px; line-height: 1.6; text-align: justify; padding-left: 60px; margin-bottom: 50px;">
+                                      <li style="margin-bottom: 10px;">That this is the first time that I will actively look for a job and therefore requesting that a Barangay Certification be issued in my favor to avail the benefits of the law.</li>
+                                      <li style="margin-bottom: 10px;">That I am aware that the benefits and privilege/s under the said law shall be valid only for one (1) year from the date that the Barangay Certification is issued.</li>
+                                      <li style="margin-bottom: 10px;">That I can avail the benefits of the law only once.</li>
+                                      <li style="margin-bottom: 10px;">That I understand that my personal information shall be included in the Roster/List of First Time Jobseekers and will not be used for any unlawful purpose.</li>
+                                      <li style="margin-bottom: 10px;">That I will inform and/or report to the Barangay personally, through text or other means, or through my family/relatives once I get employed; and</li>
+                                      <li style="margin-bottom: 10px;">That I am not beneficiary of the Job Start Program under R.A. No. 10869 and other laws that give similar exemptions for the documents or transactions exempted under R.A. No. 11261</li>
+                                      <li style="margin-bottom: 10px;">That if issued the requested Certification, I will not use the same in any fraud, neither falsify nor help and/or assist in the fabrication of the said certification.</li>
+                                      <li style="margin-bottom: 10px;">That this undertaking is made solely for the purpose of obtaining a Barangay Certification consistent with the objective of R.A. No. 11261 and not for any other purpose.</li>
+                                      <li style="margin-bottom: 10px;">That I consent to the use of my personal information pursuant</li>
+                                      <li>to the Data Privacy Act and other applicable laws, rules, and regulations.</li>
+                                    </ol>
+
+                                    <p style="text-align: left; margin: 0 0 60px 0; font-size: 14px; line-height: 1.6;">
+                                      Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong>, in the City of Manila.
+                                    </p>
+
+                                    <div style="margin-left: 50%;">
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</p>
+                                      <p style="margin: 0 0 50px 0; font-size: 14px;">First Time Jobseekers</p>
+                                      
+                                      <p style="margin: 0 0 40px 0; font-size: 14px;">Witnessed by:</p>
+                                      
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P. ALBASIN</p>
+                                      <p style="margin: 0 0 30px 0; font-size: 14px;">Kagawad</p>
+                                      
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                      <p style="margin: 0 0 20px 0; font-size: 14px;">Date</p>
+                                    </div>
+                                  </div>
+                                </div>`)
                                 setEditorVerification(r.verification_status || 'Not Verified')
                                 setEditorProcess(r.process_status || 'In process')
                                 setEditorPdfFile(null)
@@ -2041,54 +2310,21 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Certificate Editor Area */}
-                  <div style={{ width: '100%', border: '4px double #334155', padding: '50px', textAlign: 'center', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                  <div style={{ width: '100%', padding: '20px', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
                     
                     {/* Persistent QR Code in top right */}
                     {qrDataUrl && (
-                      <div style={{ position: 'absolute', top: '20px', right: '20px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff' }}>
+                      <div style={{ position: 'absolute', top: '20px', right: '20px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff', zIndex: 10 }}>
                         <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
-                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>VERIFY</div>
+                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
                       </div>
                     )}
 
-                    <h1 style={{ fontSize: '28px', marginBottom: '30px', textTransform: 'uppercase', letterSpacing: '4px', borderBottom: '2px solid #334155', display: 'inline-block', paddingBottom: '10px', color: '#0f172a', fontWeight: '900' }}>
-                      {selectedRequest.certificate_type || 'Barangay Certificate'}
-                    </h1>
-                    
-                    <div style={{ textAlign: 'left', margin: '0 auto 20px', maxWidth: '85%', padding: '15px', backgroundColor: '#f1f5f9', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
-                      <h4 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>To Whom It May Concern:</h4>
-                      <p style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#334155' }}>
-                        This is to certify that <strong style={{ fontSize: '16px', color: '#0f172a', textDecoration: 'underline' }}>{selectedRequest.full_name || selectedRequest.resident_name || 'Resident Name'}</strong>,
-                      </p>
-                      <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>
-                        is a bona fide resident of this Barangay.
-                      </p>
-                    </div>
-                    
-                    <div 
-                      contentEditable
-                      onBlur={(e) => setEditorContent(e.currentTarget.innerHTML)}
-                      dangerouslySetInnerHTML={{ __html: editorContent }}
-                      style={{ 
-                        fontSize: '16px', margin: '20px auto', lineHeight: '2', textAlign: 'justify', color: '#334155', 
-                        outline: 'none', border: '1px dashed #94a3b8', padding: '20px', minHeight: '150px', 
-                        borderRadius: '8px', backgroundColor: '#f8fafc', transition: 'border 0.3s'
-                      }}
-                      title="Click here to type your official document content"
+                    <DocumentEditor 
+                      initialContent={editorContent}
+                      requestId={selectedRequest?.id}
+                      onChange={(html) => setEditorContent(html)}
                     />
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', alignItems: 'flex-end' }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ borderBottom: '2px solid #0f172a', width: '250px', marginBottom: '8px' }}></div>
-                        <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Barangay Captain</p>
-                      </div>
-                      <div style={{ textAlign: 'right', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                        <p style={{ fontSize: '11px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#64748b' }}>VERIFICATION STATUS</p>
-                        <p style={{ fontSize: '15px', fontWeight: '900', margin: 0, color: editorVerification === 'Verified' ? '#10b981' : (editorVerification === 'Not Valid' ? '#ef4444' : '#f59e0b') }}>
-                          {editorVerification || 'Pending'}
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 </>
               ) : (
@@ -2225,6 +2461,25 @@ export default function AdminDashboardPage() {
                 >
                   Cancel
                 </button>
+                {editorMode === 'text' && (
+                  <button 
+                    onClick={() => {
+                      const printWindow = window.open('', '', 'width=800,height=1000');
+                      printWindow.document.write('<html><head><title>Print Certificate</title><style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 15mm; } .print-page { height: 95vh !important; max-height: 95vh !important; display: flex; flex-direction: column; overflow: hidden; } .print-body { flex: 1; } }</style></head><body style="margin: 0; padding: 20px;">');
+                      printWindow.document.write(editorContent);
+                      printWindow.document.write('</body></html>');
+                      printWindow.document.close();
+                      printWindow.focus();
+                      setTimeout(() => {
+                        printWindow.print();
+                        printWindow.close();
+                      }, 500);
+                    }}
+                    style={{ padding: '12px 24px', borderRadius: '6px', border: 'none', background: '#10b981', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Print Document
+                  </button>
+                )}
                 <button 
                   onClick={async () => {
                     try {

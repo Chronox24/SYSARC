@@ -439,7 +439,7 @@ app.get("/api/dashboard/:userId", async (req, res) => {
         const { userId } = req.params;
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute(`SELECT cr.*, r.full_name, r.email FROM certificate_requests cr JOIN residents r ON cr.user_id = r.id WHERE r.id = ? ORDER BY cr.created_at DESC`, [userId]);
+            const [rows] = await connection.execute(`SELECT cr.*, r.full_name, r.email, r.age, r.civil_status, r.home_address FROM certificate_requests cr JOIN residents r ON cr.user_id = r.id WHERE r.id = ? ORDER BY cr.created_at DESC`, [userId]);
             const processedRows = rows.map(request => {
                 let pdfFileStr = null;
                 if (request.pdf_file) {
@@ -586,7 +586,7 @@ app.get("/api/all-requests", async (req, res) => {
             
             // Map the resident details if they exist
             const processedRows = await Promise.all(rows.map(async (request) => {
-                const [residents] = await connection.execute("SELECT full_name, email FROM residents WHERE id = ?", [request.user_id]);
+                const [residents] = await connection.execute("SELECT full_name, email, age, civil_status, home_address FROM residents WHERE id = ?", [request.user_id]);
                 
                 let pdfFileStr = null;
                 if (request.pdf_file) {
@@ -597,7 +597,10 @@ app.get("/api/all-requests", async (req, res) => {
                     ...request,
                     pdf_file: pdfFileStr,
                     resident_name: residents.length > 0 ? residents[0].full_name : "Unknown Resident",
-                    resident_email: residents.length > 0 ? residents[0].email : "N/A"
+                    resident_email: residents.length > 0 ? residents[0].email : "N/A",
+                    age: residents.length > 0 ? residents[0].age : null,
+                    civil_status: residents.length > 0 ? residents[0].civil_status : null,
+                    address: residents.length > 0 ? residents[0].home_address : null
                 };
             }));
             
