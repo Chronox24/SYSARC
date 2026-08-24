@@ -99,6 +99,7 @@ export default function RequestFormPage() {
               required
             >
               <option value="">-- Select Certificate --</option>
+              <option value="Barangay Certificate">Barangay Certificate</option>
               <option value="Barangay Clearance">Barangay Clearance</option>
               <option value="Certificate of Residency">Certificate of Residency</option>
               <option value="Certificate of Indigency">Certificate of Indigency</option>

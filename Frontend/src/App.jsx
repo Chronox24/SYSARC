@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage"
 import ProfilePage from "./pages/ProfilePage"
 import AboutUs from "./pages/AboutUs"
 import RequestFormPage from "./pages/RequestFormPage"
+import VerifyCertificatePage from "./pages/VerifyCertificatePage"
 import AdminLoginPage from "./pages/AdminLoginPage"
 import AdminDashboardPage from "./pages/AdminDashboardPage"
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute"
@@ -14,7 +15,7 @@ import ErrorBoundary from "./components/ErrorBoundary"
 
 function AppContent() {
   const location = useLocation();
-  const isAdminPage = location.pathname.startsWith('/admin');
+  const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/verify');
 
   return (
     <>
@@ -30,6 +31,7 @@ function AppContent() {
         <Route path="/mission" element={<Navigate to="/" replace />} />
         <Route path="/about" element={<Navigate to="/" replace />} />
         <Route path="/request" element={<RequestFormPage />} />
+        <Route path="/verify/:id" element={<VerifyCertificatePage />} />
         <Route path="/admin" element={<Navigate to="/admin-login" replace />} />
         <Route path="/admin-login" element={<AdminLoginPage />} />
         <Route 

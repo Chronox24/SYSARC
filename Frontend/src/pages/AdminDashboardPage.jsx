@@ -18,6 +18,191 @@ const DocumentEditor = React.memo(({ initialContent, requestId, onChange }) => {
 }, (prevProps, nextProps) => prevProps.requestId === nextProps.requestId);
 
 
+const getCertificateTemplate = (r) => {
+  const isTarget = r.certificate_type === 'Barangay Certificate' || r.certificate_type === 'First Time Job Seeker';
+  
+  if (isTarget) {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+                                  <!-- PAGE 1 -->
+                                  <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+                                    <!-- Header -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 20px;">
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
+                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                      </div>
+                                      <div style="flex: 1; text-align: center;">
+                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
+                                        </div>
+                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
+                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
+                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
+                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
+                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
+                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
+                                      </div>
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
+                                        BAGONG PILIPINAS
+                                      </div>
+                                    </div>
+
+                                    <!-- Main Body Container -->
+                                    <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+                                      
+                                      <!-- Left Sidebar -->
+                                      <div style="width: 220px; background-color: #9bbcc4; padding: 30px 15px; border-right: 1px solid #000; text-align: center;">
+                                        <h3 style="margin: 0 0 30px 0; font-size: 16px;">Barangay 830,<br/>Zone 90 Dist VI</h3>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">BRGY Chairman</h4>
+                                        <p style="margin: 0 0 20px 0; font-size: 12px; font-weight: bold;">EFREN V. MEDINA</p>
+                                        
+                                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #d32f2f;">BARANGAY<br/>KAGAWAD</h4>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Mercedita O. Lacson</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Catherine S. Gabriel</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Jordan T. Lumanao</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Purisima P. Albasin</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Elnora C. Gamit</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Lady P. Abad</p>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Annabelle S. Cagat</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SK CHAIRMAN</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Wilton John B. Padlan</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SECRETARY</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Jonathan C. Florencio Jr.</p>
+                                        
+                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">TREASURER</h4>
+                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Dina J. Pedenes</p>
+                                      </div>
+
+                                      <!-- Right Content -->
+                                      <div style="flex: 1; padding: 40px 30px; text-align: left; display: flex; flex-direction: column;">
+                                        <div>
+                                          <p style="margin: 0 0 30px 0; font-size: 14px; font-weight: bold;">Control No: <span style="text-decoration: underline;">BC-${new Date().getFullYear()}-______</span></p>
+                                          
+                                          <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">BARANGAY CERTIFICATE</h2>
+                                          <p style="text-align: center; margin: 0 0 30px 0; font-size: 14px;">(First Time Jobseekers Assistance Act-RA 11261)</p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
+                                            This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified avail of RA 11261 or the <strong><em>First Time Jobseekers Act of 2019.</em></strong>
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
+                                            I further certify that the holder/bearer was informed of his/her rights, including the duties and responsibilities accorded by RA 11261 through the Oath of Undertaking he/she has signed and executed in the presence of our Barangay Official.
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
+                                            Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong> in the City of Manila.
+                                          </p>
+                                          
+                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
+                                            This certification is valid only for one (1) year from the issuance.
+                                          </p>
+                                        </div>
+                                        
+                                        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 30px;">
+                                          <div>
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">ALBASIN</p>
+                                          </div>
+                                          <div style="width: 250px;">
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
+                                            <p style="margin: 0 0 25px 0; font-size: 14px;">Punong Barangay</p>
+                                            
+                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                            <p style="margin: 0 0 45px 0; font-size: 14px;">Date</p>
+
+                                            <div style="padding-left: 50px;">
+                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P.</p>
+                                              <p style="margin: 0 0 25px 0; font-size: 14px;">Kagawad</p>
+                                              
+                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <!-- PAGE 2: OATH OF UNDERTAKING -->
+                                  <div style="padding-top: 50px; min-height: 1050px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 0 20px;">
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
+                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                      </div>
+                                      <div style="flex: 1; text-align: center;">
+                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
+                                        </div>
+                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
+                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
+                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
+                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
+                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
+                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
+                                      </div>
+                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
+                                        BAGONG PILIPINAS
+                                      </div>
+                                    </div>
+                                    
+                                    <div style="border-bottom: 4px solid #000; margin-bottom: 2px;"></div>
+                                    <div style="border-bottom: 1px solid #000; margin-bottom: 40px;"></div>
+
+                                    <h2 style="text-align: center; margin: 0 0 40px 0; font-size: 20px;">OATH OF UNDERTAKING</h2>
+                                    
+                                    <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
+                                      This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified and is availing the benefits of Republic Act 11261, otherwise known as the First Time Jobseekers Act of 2019, do hereby declare, agree, and undertake to abide and be bound by the following:
+                                    </p>
+
+                                    <ol style="font-size: 14px; line-height: 1.6; text-align: justify; padding-left: 60px; margin-bottom: 50px;">
+                                      <li style="margin-bottom: 10px;">That this is the first time that I will actively look for a job and therefore requesting that a Barangay Certification be issued in my favor to avail the benefits of the law.</li>
+                                      <li style="margin-bottom: 10px;">That I am aware that the benefits and privilege/s under the said law shall be valid only for one (1) year from the date that the Barangay Certification is issued.</li>
+                                      <li style="margin-bottom: 10px;">That I can avail the benefits of the law only once.</li>
+                                      <li style="margin-bottom: 10px;">That I understand that my personal information shall be included in the Roster/List of First Time Jobseekers and will not be used for any unlawful purpose.</li>
+                                      <li style="margin-bottom: 10px;">That I will inform and/or report to the Barangay personally, through text or other means, or through my family/relatives once I get employed; and</li>
+                                      <li style="margin-bottom: 10px;">That I am not beneficiary of the Job Start Program under R.A. No. 10869 and other laws that give similar exemptions for the documents or transactions exempted under R.A. No. 11261</li>
+                                      <li style="margin-bottom: 10px;">That if issued the requested Certification, I will not use the same in any fraud, neither falsify nor help and/or assist in the fabrication of the said certification.</li>
+                                      <li style="margin-bottom: 10px;">That this undertaking is made solely for the purpose of obtaining a Barangay Certification consistent with the objective of R.A. No. 11261 and not for any other purpose.</li>
+                                      <li style="margin-bottom: 10px;">That I consent to the use of my personal information pursuant</li>
+                                      <li>to the Data Privacy Act and other applicable laws, rules, and regulations.</li>
+                                    </ol>
+
+                                    <p style="text-align: left; margin: 0 0 60px 0; font-size: 14px; line-height: 1.6;">
+                                      Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong>, in the City of Manila.
+                                    </p>
+
+                                    <div style="margin-left: 50%;">
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</p>
+                                      <p style="margin: 0 0 50px 0; font-size: 14px;">First Time Jobseekers</p>
+                                      
+                                      <p style="margin: 0 0 40px 0; font-size: 14px;">Witnessed by:</p>
+                                      
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P. ALBASIN</p>
+                                      <p style="margin: 0 0 30px 0; font-size: 14px;">Kagawad</p>
+                                      
+                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
+                                      <p style="margin: 0 0 20px 0; font-size: 14px;">Date</p>
+                                    </div>
+                                  </div>
+                                </div>`;
+  }
+  
+  const residentName = (r.full_name || r.resident_name || 'Resident Name').toUpperCase();
+  const age = r.age || '___';
+  const civilStatus = r.civil_status || 'Single';
+  const address = r.home_address || r.address || '___';
+  
+  return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff; padding: 40px;">
+    <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">${(r.certificate_type || 'CERTIFICATE').toUpperCase()}</h2>
+    <p style="text-align: justify; text-indent: 40px; margin-top: 40px; font-size: 16px; line-height: 1.6;">
+      This is to certify that, <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at ${address} is a jurisdiction of Barangay 830, Zone 90, District VI.
+    </p>
+    <p style="text-align: right; margin-top: 60px;">
+      Signed this <strong>${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong>.
+    </p>
+  </div>`;
+};
+
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
   const [admin, setAdmin] = useState(null)
@@ -58,7 +243,17 @@ export default function AdminDashboardPage() {
 
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
-  const prevCountsRef = React.useRef({ pendingReg: 0, pendingUpd: 0, requests: 0, messages: 0 })
+  const prevCountsRef = React.useRef({ pendingReg: -1, pendingUpd: -1, requests: -1, messages: -1 })
+  const hasFetchedRef = React.useRef({ pendingReg: false, pendingUpd: false, requests: false, messages: false })
+  
+  // Load persisted notifications if they exist
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('admin_notifications');
+      if (stored) setNotifications(JSON.parse(stored));
+    } catch(e) {}
+  }, []);
+
 
   const [archiveSubTab, setArchiveSubTab] = useState('residents')
   const [archiveFolders, setArchiveFolders] = useState([])
@@ -213,11 +408,22 @@ export default function AdminDashboardPage() {
     const prev = prevCountsRef.current;
     const newNotifs = [];
 
-    // Trigger notification if counts increased since last check
-    if (pendingRegCount > prev.pendingReg) newNotifs.push(`New pending registration received!`);
-    if (pendingUpdCount > prev.pendingUpd) newNotifs.push(`New profile update request!`);
-    if (totalRequestsCount > prev.requests) newNotifs.push(`New certificate request!`);
-    if (unreadMessagesCount > prev.messages) newNotifs.push(`New unread message!`);
+    if (hasFetchedRef.current.pendingReg) {
+      if (prev.pendingReg !== -1 && pendingRegCount > prev.pendingReg) newNotifs.push(`New pending registration received!`);
+      prev.pendingReg = pendingRegCount;
+    }
+    if (hasFetchedRef.current.pendingUpd) {
+      if (prev.pendingUpd !== -1 && pendingUpdCount > prev.pendingUpd) newNotifs.push(`New profile update request!`);
+      prev.pendingUpd = pendingUpdCount;
+    }
+    if (hasFetchedRef.current.requests) {
+      if (prev.requests !== -1 && totalRequestsCount > prev.requests) newNotifs.push(`New certificate request!`);
+      prev.requests = totalRequestsCount;
+    }
+    if (hasFetchedRef.current.messages) {
+      if (prev.messages !== -1 && unreadMessagesCount > prev.messages) newNotifs.push(`New unread message!`);
+      prev.messages = unreadMessagesCount;
+    }
 
     if (newNotifs.length > 0) {
       setNotifications(prevNotifs => {
@@ -227,16 +433,11 @@ export default function AdminDashboardPage() {
           time: new Date().toLocaleTimeString(),
           isNew: true
         }));
-        return [...notifObjects, ...prevNotifs].slice(0, 50); // Keep last 50 notifications
+        const updated = [...notifObjects, ...prevNotifs].slice(0, 50);
+        localStorage.setItem('admin_notifications', JSON.stringify(updated));
+        return updated;
       });
     }
-
-    prevCountsRef.current = {
-      pendingReg: pendingRegCount,
-      pendingUpd: pendingUpdCount,
-      requests: totalRequestsCount,
-      messages: unreadMessagesCount
-    };
   }, [pendingRegCount, pendingUpdCount, totalRequestsCount, unreadMessagesCount]);
 
   const fetchConversations = async () => {
@@ -244,6 +445,7 @@ export default function AdminDashboardPage() {
       const res = await fetch('/api/admin/conversations')
       const data = await res.json()
       setConversations(Array.isArray(data) ? data : [])
+      hasFetchedRef.current.messages = true;
     } catch (err) {
       console.error('Failed to load conversations', err)
     }
@@ -435,6 +637,7 @@ export default function AdminDashboardPage() {
       const res = await fetch('/api/all-requests')
       const data = await res.json()
       setCertificateRequests(Array.isArray(data) ? data : [])
+      hasFetchedRef.current.requests = true;
     } catch (err) {
       console.error('Failed to fetch requests:', err.message)
       setCertificateRequests([])
@@ -447,6 +650,7 @@ export default function AdminDashboardPage() {
       const response = await fetch('/api/admin/pending-registrations')
       const data = await response.json()
       setPendingRegistrations(Array.isArray(data) ? data : [])
+      hasFetchedRef.current.pendingReg = true;
     } catch (err) {
       console.error('Failed to fetch pending registrations:', err)
     }
@@ -457,6 +661,7 @@ export default function AdminDashboardPage() {
       const response = await fetch('/api/admin/pending-updates')
       const data = await response.json()
       setPendingUpdates(Array.isArray(data) ? data : [])
+      hasFetchedRef.current.pendingUpd = true;
     } catch (err) {
       console.error('Failed to fetch pending updates:', err)
     }
@@ -566,7 +771,10 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch(e) {}
     localStorage.removeItem('adminUser')
     navigate('/admin-login')
   }
@@ -910,7 +1118,11 @@ export default function AdminDashboardPage() {
                   <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: '16px' }}>Notifications</h3>
                     <button 
-                      onClick={() => setNotifications(n => n.map(x => ({...x, isNew: false})))}
+                      onClick={() => setNotifications(n => {
+                        const updated = n.map(x => ({...x, isNew: false}));
+                        localStorage.setItem('admin_notifications', JSON.stringify(updated));
+                        return updated;
+                      })}
                       style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '12px' }}
                     >
                       Mark all read
@@ -1959,169 +2171,7 @@ export default function AdminDashboardPage() {
                               style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 'bold' }}
                               onClick={() => {
                                 setSelectedRequest(r)
-                                setEditorContent(r.certificate_content || `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
-                                  <!-- PAGE 1 -->
-                                  <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
-                                    <!-- Header -->
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 20px;">
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-                                      </div>
-                                      <div style="flex: 1; text-align: center;">
-                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
-                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
-                                        </div>
-                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
-                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
-                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
-                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
-                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
-                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
-                                      </div>
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
-                                        BAGONG PILIPINAS
-                                      </div>
-                                    </div>
-
-                                    <!-- Main Body Container -->
-                                    <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
-                                      
-                                      <!-- Left Sidebar -->
-                                      <div style="width: 220px; background-color: #9bbcc4; padding: 30px 15px; border-right: 1px solid #000; text-align: center;">
-                                        <h3 style="margin: 0 0 30px 0; font-size: 16px;">Barangay 830,<br/>Zone 90 Dist VI</h3>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">BRGY Chairman</h4>
-                                        <p style="margin: 0 0 20px 0; font-size: 12px; font-weight: bold;">EFREN V. MEDINA</p>
-                                        
-                                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #d32f2f;">BARANGAY<br/>KAGAWAD</h4>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Mercedita O. Lacson</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Catherine S. Gabriel</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Jordan T. Lumanao</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Purisima P. Albasin</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Elnora C. Gamit</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Lady P. Abad</p>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Annabelle S. Cagat</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SK CHAIRMAN</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Wilton John B. Padlan</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SECRETARY</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Jonathan C. Florencio Jr.</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">TREASURER</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Dina J. Pedenes</p>
-                                      </div>
-
-                                      <!-- Right Content -->
-                                      <div style="flex: 1; padding: 40px 30px; text-align: left; display: flex; flex-direction: column;">
-                                        <div>
-                                          <p style="margin: 0 0 30px 0; font-size: 14px; font-weight: bold;">Control No: <span style="text-decoration: underline;">BC-${new Date().getFullYear()}-______</span></p>
-                                          
-                                          <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">BARANGAY CERTIFICATE</h2>
-                                          <p style="text-align: center; margin: 0 0 30px 0; font-size: 14px;">(First Time Jobseekers Assistance Act-RA 11261)</p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
-                                            This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified avail of RA 11261 or the <strong><em>First Time Jobseekers Act of 2019.</em></strong>
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
-                                            I further certify that the holder/bearer was informed of his/her rights, including the duties and responsibilities accorded by RA 11261 through the Oath of Undertaking he/she has signed and executed in the presence of our Barangay Official.
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
-                                            Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong> in the City of Manila.
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
-                                            This certification is valid only for one (1) year from the issuance.
-                                          </p>
-                                        </div>
-                                        
-                                        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 30px;">
-                                          <div>
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">ALBASIN</p>
-                                          </div>
-                                          <div style="width: 250px;">
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
-                                            <p style="margin: 0 0 25px 0; font-size: 14px;">Punong Barangay</p>
-                                            
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                            <p style="margin: 0 0 45px 0; font-size: 14px;">Date</p>
-
-                                            <div style="padding-left: 50px;">
-                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P.</p>
-                                              <p style="margin: 0 0 25px 0; font-size: 14px;">Kagawad</p>
-                                              
-                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <!-- PAGE 2: OATH OF UNDERTAKING -->
-                                  <div style="padding-top: 50px; min-height: 1050px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 0 20px;">
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-                                      </div>
-                                      <div style="flex: 1; text-align: center;">
-                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
-                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
-                                        </div>
-                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
-                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
-                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
-                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
-                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
-                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
-                                      </div>
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
-                                        BAGONG PILIPINAS
-                                      </div>
-                                    </div>
-                                    
-                                    <div style="border-bottom: 4px solid #000; margin-bottom: 2px;"></div>
-                                    <div style="border-bottom: 1px solid #000; margin-bottom: 40px;"></div>
-
-                                    <h2 style="text-align: center; margin: 0 0 40px 0; font-size: 20px;">OATH OF UNDERTAKING</h2>
-                                    
-                                    <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
-                                      This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified and is availing the benefits of Republic Act 11261, otherwise known as the First Time Jobseekers Act of 2019, do hereby declare, agree, and undertake to abide and be bound by the following:
-                                    </p>
-
-                                    <ol style="font-size: 14px; line-height: 1.6; text-align: justify; padding-left: 60px; margin-bottom: 50px;">
-                                      <li style="margin-bottom: 10px;">That this is the first time that I will actively look for a job and therefore requesting that a Barangay Certification be issued in my favor to avail the benefits of the law.</li>
-                                      <li style="margin-bottom: 10px;">That I am aware that the benefits and privilege/s under the said law shall be valid only for one (1) year from the date that the Barangay Certification is issued.</li>
-                                      <li style="margin-bottom: 10px;">That I can avail the benefits of the law only once.</li>
-                                      <li style="margin-bottom: 10px;">That I understand that my personal information shall be included in the Roster/List of First Time Jobseekers and will not be used for any unlawful purpose.</li>
-                                      <li style="margin-bottom: 10px;">That I will inform and/or report to the Barangay personally, through text or other means, or through my family/relatives once I get employed; and</li>
-                                      <li style="margin-bottom: 10px;">That I am not beneficiary of the Job Start Program under R.A. No. 10869 and other laws that give similar exemptions for the documents or transactions exempted under R.A. No. 11261</li>
-                                      <li style="margin-bottom: 10px;">That if issued the requested Certification, I will not use the same in any fraud, neither falsify nor help and/or assist in the fabrication of the said certification.</li>
-                                      <li style="margin-bottom: 10px;">That this undertaking is made solely for the purpose of obtaining a Barangay Certification consistent with the objective of R.A. No. 11261 and not for any other purpose.</li>
-                                      <li style="margin-bottom: 10px;">That I consent to the use of my personal information pursuant</li>
-                                      <li>to the Data Privacy Act and other applicable laws, rules, and regulations.</li>
-                                    </ol>
-
-                                    <p style="text-align: left; margin: 0 0 60px 0; font-size: 14px; line-height: 1.6;">
-                                      Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong>, in the City of Manila.
-                                    </p>
-
-                                    <div style="margin-left: 50%;">
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</p>
-                                      <p style="margin: 0 0 50px 0; font-size: 14px;">First Time Jobseekers</p>
-                                      
-                                      <p style="margin: 0 0 40px 0; font-size: 14px;">Witnessed by:</p>
-                                      
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P. ALBASIN</p>
-                                      <p style="margin: 0 0 30px 0; font-size: 14px;">Kagawad</p>
-                                      
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                      <p style="margin: 0 0 20px 0; font-size: 14px;">Date</p>
-                                    </div>
-                                  </div>
-                                </div>`)
+                                setEditorContent(r.certificate_content || getCertificateTemplate(r))
                                 setEditorVerification(r.verification_status || 'Not Verified')
                                 setEditorProcess(r.process_status || 'In process')
                                 setEditorPdfFile(null)
@@ -2129,7 +2179,7 @@ export default function AdminDashboardPage() {
                                 setExistingPdf(r.pdf_file || null)
                                 setEditorMode(r.pdf_file ? 'pdf' : 'text')
                                 setVisibleToResident(r.visible_to_resident || 'text')
-                                QRCode.toDataURL(`https://barangay830.local/verify/${r.id}`, { width: 100, margin: 1 })
+                                QRCode.toDataURL(`${window.location.origin}/verify/${r.tracking_code}`, { width: 100, margin: 1 })
                                   .then(url => setQrDataUrl(url))
                                   .catch(err => console.error(err))
                               }}>

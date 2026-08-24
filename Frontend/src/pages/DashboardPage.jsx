@@ -190,7 +190,10 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch(e) {}
     localStorage.removeItem('currentUser')
     navigate('/')
   }

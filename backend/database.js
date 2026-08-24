@@ -1,14 +1,56 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const mysql = require("mysql2/promise");
 const path = require("path");
 const multer = require("multer");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+
 
 const app = express();
-app.use(cors());
+
+app.use(helmet());
+app.use(cookieParser());
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    credentials: true
+}));
+
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per `window`
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+    // Exempt public routes
+    const publicPaths = ['/api/login', '/api/admin/login', '/api/register', '/api/request-certificate', '/api/health'];
+    if (publicPaths.includes(req.path) || req.path.startsWith('/api/verify/')) {
+        return next();
+    }
+
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    
+    jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret', (err, user) => {
+        if (err) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+        req.user = user;
+        next();
+    });
+};
+
+app.use(authenticateToken);
+
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });
@@ -20,10 +62,10 @@ const upload = multer({
 });
 
 const pool = mysql.createPool({
-  host: '127.0.0.1',
-  user: 'root',
-  password: '',
-  database: 'brgy_database',
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASS || '',
+  database: process.env.DB_NAME || 'brgy_database',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -123,6 +165,7 @@ const pool = mysql.createPool({
         id INT PRIMARY KEY AUTO_INCREMENT,
         user_id INT NOT NULL,
         certificate_type VARCHAR(255) NOT NULL,
+          tracking_code VARCHAR(36) UNIQUE,
         verification_status VARCHAR(50) DEFAULT 'Not Verified',
         process_status ENUM('In process', 'For Pickup', 'Claimed', 'Void') DEFAULT 'In process',
         certificate_content TEXT,
@@ -223,7 +266,28 @@ const pool = mysql.createPool({
     await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
     await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
     
-    console.log("✓ Database tables created/verified!");
+    console.log("✅ Database tables created/verified!");
+
+    // Add tracking_code to existing table if missing and backfill
+    try {
+      const [cols] = await connection.query("SHOW COLUMNS FROM certificate_requests LIKE 'tracking_code'");
+      if (cols.length === 0) {
+        await connection.query("ALTER TABLE certificate_requests ADD COLUMN tracking_code VARCHAR(36) UNIQUE");
+        console.log("Added tracking_code column to certificate_requests.");
+      }
+      
+      // Backfill missing tracking_codes
+      const [rowsToBackfill] = await connection.query("SELECT id FROM certificate_requests WHERE tracking_code IS NULL");
+      if (rowsToBackfill.length > 0) {
+        const crypto = require('crypto');
+        for (const row of rowsToBackfill) {
+          await connection.query("UPDATE certificate_requests SET tracking_code = ? WHERE id = ?", [crypto.randomUUID(), row.id]);
+        }
+        console.log(`Backfilled ${rowsToBackfill.length} records with tracking_code.`);
+      }
+    } catch (e) {
+      console.log("Schema migration error:", e.message);
+    }
 
     const adminEmail = 'sysarch.admin@local';
     const adminPassword = 'Admin@2026!';
@@ -300,7 +364,9 @@ app.post("/api/login", async (req, res) => {
               }
             }
             if (!match) return res.status(401).json({ message: "Wrong password" });
-            res.json({ user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null } });
+              const token = jwt.sign({ id: user.id, role: 'resident' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '1d' });
+              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+              res.json({ user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null } });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -324,7 +390,9 @@ app.post("/api/admin/login", async (req, res) => {
               }
             }
             if (!match) return res.status(401).json({ message: "Wrong password" });
-            res.json({ admin: { id: admin.id, name: admin.name, role: admin.role, email: admin.email } });
+              const token = jwt.sign({ id: admin.id, role: 'admin' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '1d' });
+              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+              res.json({ admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -573,6 +641,11 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+
+app.post('/api/logout', (req, res) => {
+    res.clearCookie('token');
+    res.json({ message: 'Logged out' });
+});
 app.get("/api/all-requests", async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -1007,6 +1080,33 @@ app.put("/api/admin/resident/:id/folder", async (req, res) => {
             res.json({ message: 'Resident moved to folder successfully' });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+
+// --- VERIFY CERTIFICATE PUBLIC ENDPOINT ---
+app.get("/api/verify/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const connection = await pool.getConnection();
+        try {
+            const [rows] = await connection.execute("SELECT verification_status, certificate_type FROM certificate_requests WHERE tracking_code = ?", [id]);
+            if (rows.length === 0) {
+                return res.json({ valid: false, status: 'Not Found' });
+            }
+            const request = rows[0];
+            const isVerified = request.verification_status === 'Verified';
+            return res.json({ 
+                valid: isVerified, 
+                status: request.verification_status,
+                type: request.certificate_type
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (err) {
+        console.error("Verify Endpoint Error:", err.message);
+        res.status(500).json({ valid: false, status: 'Server Error' });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
