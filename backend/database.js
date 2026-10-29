@@ -63,9 +63,11 @@ const upload = multer({
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
+  port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || '',
   database: process.env.DB_NAME || 'brgy_database',
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -232,39 +234,39 @@ const pool = mysql.createPool({
       )
     `);
 
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS id_photo LONGBLOB;`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS archive_folder_id INT DEFAULT NULL;`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN id_photo LONGBLOB;`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN archive_folder_id INT DEFAULT NULL;`).catch(() => {});
     await connection.query(`ALTER TABLE residents ADD CONSTRAINT fk_resident_archive_folder FOREIGN KEY (archive_folder_id) REFERENCES resident_archive_folders(id) ON DELETE SET NULL;`).catch(() => {}); // Catch if constraint already exists
 
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending';`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS is_archived ENUM('No', 'Yes') DEFAULT 'No';`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS archived_at DATETIME DEFAULT NULL;`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS nickname VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS religion VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS civil_status VARCHAR(50);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS barangay VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS city_municipality VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS home_address TEXT;`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(20);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS post_grad_course VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS post_grad_year VARCHAR(4);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS college_course VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS college_year VARCHAR(4);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS high_school VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS high_school_year VARCHAR(4);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS elementary VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS elementary_year VARCHAR(4);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_education VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS other_year VARCHAR(4);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS emergency_name VARCHAR(255);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS emergency_phone VARCHAR(20);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS relationship VARCHAR(50);`);
-    await connection.query(`ALTER TABLE residents ADD COLUMN IF NOT EXISTS signature_file LONGBLOB;`);
+    await connection.query(`ALTER TABLE residents ADD COLUMN is_verified ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending';`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN is_archived ENUM('No', 'Yes') DEFAULT 'No';`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN archived_at DATETIME DEFAULT NULL;`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN area VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN other_area VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN nickname VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN religion VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN civil_status VARCHAR(50);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN barangay VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN city_municipality VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN home_address TEXT;`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN mobile_phone VARCHAR(20);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN post_grad_course VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN post_grad_year VARCHAR(4);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN college_course VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN college_year VARCHAR(4);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN high_school VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN high_school_year VARCHAR(4);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN elementary VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN elementary_year VARCHAR(4);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN other_education VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN other_year VARCHAR(4);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN emergency_name VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN emergency_phone VARCHAR(20);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN relationship VARCHAR(50);`).catch(() => {});
+    await connection.query(`ALTER TABLE residents ADD COLUMN signature_file LONGBLOB;`).catch(() => {});
     
-    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS area VARCHAR(255);`);
-    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN IF NOT EXISTS other_area VARCHAR(255);`);
+    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN area VARCHAR(255);`).catch(() => {});
+    await connection.query(`ALTER TABLE profile_update_requests ADD COLUMN other_area VARCHAR(255);`).catch(() => {});
     
     console.log("✅ Database tables created/verified!");
 
