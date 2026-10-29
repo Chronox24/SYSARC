@@ -1,9 +1,9 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: [path.join(__dirname, '.env'), path.join(process.cwd(), '.env'), path.join(process.cwd(), 'backend', '.env')] });
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const mysql = require("mysql2/promise");
-const path = require("path");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
@@ -169,6 +169,7 @@ const pool = mysql.createPool({
         certificate_type VARCHAR(255) NOT NULL,
           tracking_code VARCHAR(36) UNIQUE,
         verification_status VARCHAR(50) DEFAULT 'Not Verified',
+        verified_at DATETIME DEFAULT NULL,
         process_status ENUM('In process', 'For Pickup', 'Claimed', 'Void') DEFAULT 'In process',
         certificate_content TEXT,
         request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -278,6 +279,14 @@ const pool = mysql.createPool({
         console.log("Added tracking_code column to certificate_requests.");
       }
       
+      
+      // Add verified_at to certificate_requests if missing and backfill
+      const [vCols] = await connection.query("SHOW COLUMNS FROM certificate_requests LIKE 'verified_at'");
+      if (vCols.length === 0) {
+        await connection.query("ALTER TABLE certificate_requests ADD COLUMN verified_at DATETIME DEFAULT NULL");
+        console.log("Added verified_at column to certificate_requests.");
+      }
+      await connection.query("UPDATE certificate_requests SET verified_at = COALESCE(request_date, created_at, NOW()) WHERE verification_status = 'Verified' AND verified_at IS NULL");
       // Backfill missing tracking_codes
       const [rowsToBackfill] = await connection.query("SELECT id FROM certificate_requests WHERE tracking_code IS NULL");
       if (rowsToBackfill.length > 0) {
@@ -695,8 +704,21 @@ app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
         const { verification_status, process_status, certificate_content, remove_pdf, visible_to_resident } = req.body;
         const connection = await pool.getConnection();
         try {
-            let updateQuery = "UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=?, visible_to_resident=?";
-            let queryParams = [verification_status, process_status, certificate_content || null, visible_to_resident || 'text'];
+            // Check existing record to manage verified_at date
+            const [currentRows] = await connection.execute("SELECT verification_status, verified_at FROM certificate_requests WHERE id = ?", [id]);
+            const current = currentRows[0];
+            let verifiedAt = current ? current.verified_at : null;
+
+            if (verification_status === 'Verified') {
+                if (!verifiedAt || current?.verification_status !== 'Verified') {
+                    verifiedAt = new Date();
+                }
+            } else {
+                verifiedAt = null;
+            }
+
+            let updateQuery = "UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=?, visible_to_resident=?, verified_at=?";
+            let queryParams = [verification_status, process_status, certificate_content || null, visible_to_resident || 'text', verifiedAt];
 
             if (req.file) {
                 updateQuery += ", pdf_file=?";
@@ -709,7 +731,7 @@ app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
             queryParams.push(id);
 
             await connection.execute(updateQuery, queryParams);
-            res.json({ message: "Request updated successfully" });
+            res.json({ message: "Request updated successfully", verified_at: verifiedAt });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -1091,16 +1113,51 @@ app.get("/api/verify/:id", async (req, res) => {
         const { id } = req.params;
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute("SELECT verification_status, certificate_type FROM certificate_requests WHERE tracking_code = ?", [id]);
+            const numId = isNaN(Number(id)) ? -1 : Number(id);
+            const [rows] = await connection.execute(
+                "SELECT id, tracking_code, verification_status, certificate_type, verified_at, request_date, created_at FROM certificate_requests WHERE tracking_code = ? OR id = ?",
+                [id, numId]
+            );
             if (rows.length === 0) {
                 return res.json({ valid: false, status: 'Not Found' });
             }
             const request = rows[0];
             const isVerified = request.verification_status === 'Verified';
+            
+            let verifiedDate = request.verified_at;
+            if (isVerified && !verifiedDate) {
+                verifiedDate = request.request_date || request.created_at;
+            }
+
+            let isExpired = false;
+            let expirationDate = null;
+            let daysRemaining = null;
+
+            if (isVerified && verifiedDate) {
+                const verifiedTime = new Date(verifiedDate).getTime();
+                const EXPIRATION_DAYS = 30;
+                const expirationTime = verifiedTime + (EXPIRATION_DAYS * 24 * 60 * 60 * 1000);
+                expirationDate = new Date(expirationTime);
+                const now = Date.now();
+
+                if (now > expirationTime) {
+                    isExpired = true;
+                } else {
+                    daysRemaining = Math.max(0, Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24)));
+                }
+            }
+
             return res.json({ 
-                valid: isVerified, 
-                status: request.verification_status,
-                type: request.certificate_type
+                valid: isVerified && !isExpired,
+                is_verified: isVerified,
+                is_expired: isExpired,
+                status: isExpired ? 'Expired' : request.verification_status,
+                type: request.certificate_type,
+                tracking_code: request.tracking_code,
+                verified_at: verifiedDate ? new Date(verifiedDate).toISOString() : null,
+                expiration_date: expirationDate ? expirationDate.toISOString() : null,
+                days_remaining: daysRemaining,
+                validity_days: 30
             });
         } finally {
             connection.release();
@@ -1112,4 +1169,8 @@ app.get("/api/verify/:id", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => console.log(`✓ Server running on port ${PORT} and bound to 0.0.0.0`));
+if (!process.env.VERCEL && require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => console.log(`✓ Server running on port ${PORT} and bound to 0.0.0.0`));
+}
+
+module.exports = app;

@@ -58,7 +58,7 @@ export default function DashboardPage() {
       return;
     }
 
-    QRCode.toDataURL(`https://barangay830.local/verify/${viewMockupRequest.id}`, { width: 100, margin: 1 })
+    QRCode.toDataURL(`${window.location.origin}/verify/${viewMockupRequest.tracking_code || viewMockupRequest.id}`, { width: 100, margin: 1 })
       .then(url => setQrDataUrl(url))
       .catch(err => console.error(err));
 
@@ -408,7 +408,8 @@ export default function DashboardPage() {
                 {qrDataUrl && (
                   <div style={{ position: 'absolute', top: '40px', right: '40px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff', zIndex: 10 }}>
                     <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
-                    <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
+                    <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#0f172a', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
+                    <div style={{ fontSize: '8px', color: '#64748b', textAlign: 'center' }}>Valid for 30 Days</div>
                   </div>
                 )}
                 
@@ -461,11 +462,17 @@ export default function DashboardPage() {
                     <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Barangay Captain</p>
                   </div>
                   
-                  <div style={{ textAlign: 'right', padding: '15px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                    <p style={{ fontSize: '12px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#64748b' }}>VERIFICATION STATUS</p>
+                  <div style={{ textAlign: 'right', padding: '14px 18px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', minWidth: '180px' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#64748b', letterSpacing: '0.5px' }}>VERIFICATION STATUS</p>
                     <p style={{ fontSize: '16px', fontWeight: '900', margin: 0, color: viewMockupRequest.verification_status === 'Verified' ? '#10b981' : (viewMockupRequest.verification_status === 'Not Valid' ? '#ef4444' : '#f59e0b') }}>
                       {viewMockupRequest.verification_status || 'Pending'}
                     </p>
+                    {viewMockupRequest.verification_status === 'Verified' && (
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', fontSize: '11px', color: '#475563', lineHeight: '1.4' }}>
+                        <div>Validated: <strong>{new Date(viewMockupRequest.verified_at || viewMockupRequest.request_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong></div>
+                        <div style={{ color: '#16a34a', fontWeight: '600' }}>Validity: 30 Days</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

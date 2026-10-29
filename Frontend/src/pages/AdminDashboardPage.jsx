@@ -2179,7 +2179,7 @@ export default function AdminDashboardPage() {
                                 setExistingPdf(r.pdf_file || null)
                                 setEditorMode(r.pdf_file ? 'pdf' : 'text')
                                 setVisibleToResident(r.visible_to_resident || 'text')
-                                QRCode.toDataURL(`${window.location.origin}/verify/${r.tracking_code}`, { width: 100, margin: 1 })
+                                QRCode.toDataURL(`${window.location.origin}/verify/${r.tracking_code || r.id}`, { width: 100, margin: 1 })
                                   .then(url => setQrDataUrl(url))
                                   .catch(err => console.error(err))
                               }}>
@@ -2366,7 +2366,8 @@ export default function AdminDashboardPage() {
                     {qrDataUrl && (
                       <div style={{ position: 'absolute', top: '20px', right: '20px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff', zIndex: 10 }}>
                         <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
-                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
+                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#0f172a', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
+                        <div style={{ fontSize: '8px', color: '#64748b', textAlign: 'center' }}>Valid for 30 Days</div>
                       </div>
                     )}
 
