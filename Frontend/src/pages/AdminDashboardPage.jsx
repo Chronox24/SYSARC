@@ -1612,9 +1612,9 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAccounts()
-      fetchRequests()
+      fetchRequests(true)
     }
-    if (activeTab === 'requests') fetchRequests()
+    if (activeTab === 'requests') fetchRequests(true)
     if (activeTab === 'residents') fetchAccounts()
     if (activeTab === 'chat') fetchConversations()
     if (activeTab === 'pending') fetchPendingRegistrations()
@@ -1634,7 +1634,7 @@ export default function AdminDashboardPage() {
       // Background polling for all pending data to keep badges "live"
       fetchPendingRegistrations();
       fetchPendingUpdates();
-      fetchRequests();
+      fetchRequests(true);
       fetchConversations();
       
       // Update specific chat messages if chat tab is open and resident is selected
@@ -1904,19 +1904,26 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const fetchRequests = async () => {
-    setRequestLoading(true)
+  const fetchRequests = async (silent = false) => {
+    if (!silent && !hasFetchedRef.current.requests) {
+      setRequestLoading(true);
+    }
     try {
-      const res = await adminFetch('/api/all-requests')
-      const data = await res.json()
-      setCertificateRequests(Array.isArray(data) ? data : [])
+      const res = await adminFetch('/api/all-requests');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setCertificateRequests(data);
+      }
       hasFetchedRef.current.requests = true;
     } catch (err) {
-      console.error('Failed to fetch requests:', err.message)
-      setCertificateRequests([])
+      console.error('Failed to fetch requests:', err.message);
+      if (!hasFetchedRef.current.requests) {
+        setCertificateRequests([]);
+      }
+    } finally {
+      setRequestLoading(false);
     }
-    setRequestLoading(false)
-  }
+  };
 
   const fetchPendingRegistrations = async () => {
     try {
@@ -3762,7 +3769,7 @@ export default function AdminDashboardPage() {
                   </button>
                 </div>
               </div>
-              {requestLoading ? (
+              {requestLoading && certificateRequests.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--accent-purple)' }}>
                   ⏳ Loading requests from database...
                 </div>
