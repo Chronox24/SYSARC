@@ -973,7 +973,6 @@ export default function AdminDashboardPage() {
   const [accounts, setAccounts] = useState([])
   const [certificateRequests, setCertificateRequests] = useState([])
   const [selectedRequest, setSelectedRequest] = useState(null)
-  const [requestLoading, setRequestLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('residents')
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -1904,10 +1903,7 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const fetchRequests = async (silent = false) => {
-    if (!silent && !hasFetchedRef.current.requests) {
-      setRequestLoading(true);
-    }
+  const fetchRequests = async () => {
     try {
       const res = await adminFetch('/api/all-requests');
       const data = await res.json();
@@ -1917,11 +1913,6 @@ export default function AdminDashboardPage() {
       hasFetchedRef.current.requests = true;
     } catch (err) {
       console.error('Failed to fetch requests:', err.message);
-      if (!hasFetchedRef.current.requests) {
-        setCertificateRequests([]);
-      }
-    } finally {
-      setRequestLoading(false);
     }
   };
 
@@ -3769,33 +3760,27 @@ export default function AdminDashboardPage() {
                   </button>
                 </div>
               </div>
-              {requestLoading && certificateRequests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--accent-purple)' }}>
-                  ⏳ Loading requests from database...
-                </div>
-              ) : certificateRequests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  No certificate requests found in database.
-                </div>
-              ) : filteredRequests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  No requests match your search or filter.
-                </div>
-              ) : (
-                <table className="flux-table">
-                  <thead>
+              <table className="flux-table">
+                <thead>
+                  <tr>
+                    <th>Resident</th>
+                    <th>Type</th>
+                    <th>Requested Date</th>
+                    <th>Claimed Date</th>
+                    <th>Verification</th>
+                    <th>Process</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRequests.length === 0 ? (
                     <tr>
-                      <th>Resident</th>
-                      <th>Type</th>
-                      <th>Requested Date</th>
-                      <th>Claimed Date</th>
-                      <th>Verification</th>
-                      <th>Process</th>
-                      <th>Action</th>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                        {certificateRequests.length === 0 ? 'No certificate requests found in database.' : 'No requests match your search or filter.'}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRequests.map(r => (
+                  ) : (
+                    filteredRequests.map(r => (
                       <tr key={r.id}>
                         <td>{r.full_name || r.resident_name || 'Resident #' + r.user_id}</td>
                         <td>{r.certificate_type}</td>
@@ -3849,10 +3834,10 @@ export default function AdminDashboardPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    ))
+                  )}
+                </tbody>
+              </table>
             </>
           )}
 
