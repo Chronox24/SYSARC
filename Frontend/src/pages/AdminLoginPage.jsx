@@ -42,7 +42,12 @@ export default function AdminLoginPage() {
         })
       })
 
-      const data = await response.json()
+      let data = {}
+      try {
+        data = await response.json()
+      } catch (e) {
+        throw new Error(response.status === 404 || response.status === 405 ? 'Backend API route not found. Please verify Vercel Root Directory is set to root.' : 'Invalid response from server')
+      }
 
       if (!response.ok) {
         setError(data.message || 'Login failed')
