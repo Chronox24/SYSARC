@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "cd Frontend && npm install && npm run build",
+    "start": "node backend/database.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

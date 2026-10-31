@@ -1308,3 +1308,164 @@
   background-color: var(--surface);
   color: var(--text-primary);
 }
+
+
+/* ==========================================================================
+   FLUX NOTIFICATION BAR / TOAST SYSTEM
+   ========================================================================== */
+.flux-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  max-width: 440px;
+  width: calc(100vw - 48px);
+}
+
+.flux-toast-bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  animation: fluxToastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes fluxToastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.flux-toast-bar.flux-toast-success {
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+  border-left: 5px solid #10b981;
+}
+
+.flux-toast-bar.flux-toast-error {
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+  border-left: 5px solid #ef4444;
+}
+
+.flux-toast-bar.flux-toast-warning {
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+  border-left: 5px solid #f59e0b;
+}
+
+.flux-toast-bar.flux-toast-info {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+  border-left: 5px solid #3b82f6;
+}
+
+.flux-toast-icon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  margin-top: 1px;
+}
+
+.flux-toast-success .flux-toast-icon {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.flux-toast-error .flux-toast-icon {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.flux-toast-warning .flux-toast-icon {
+  background-color: #f59e0b;
+  color: #ffffff;
+}
+
+.flux-toast-info .flux-toast-icon {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.flux-toast-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.flux-toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  color: #ffffff;
+}
+
+.flux-toast-message {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  word-break: break-word;
+}
+
+.flux-toast-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 6px;
+  margin-top: -3px;
+  margin-right: -4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.flux-toast-close:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.flux-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.flux-toast-progress-bar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  animation: fluxToastProgress linear forwards;
+}
+
+@keyframes fluxToastProgress {
+  from { width: 100%; }
+  to { width: 0%; }
+}

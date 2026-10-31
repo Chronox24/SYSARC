@@ -111,9 +111,35 @@ export default function DashboardPage() {
     };
   }, [viewMockupRequest]);
 
+  const getResidentToken = () => {
+    try {
+      const stored = localStorage.getItem('currentUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.token || '';
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  };
+
+  const residentFetch = async (url, options = {}) => {
+    const token = getResidentToken();
+    const headers = new Headers(options.headers || {});
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  };
+
   const fetchUserData = async (userId) => {
     try {
-      const response = await fetch(`/api/user/${userId}`)
+      const response = await residentFetch(`/api/user/${userId}`)
       const data = await response.json()
       if (response.ok) {
         setUser(prev => ({ ...prev, ...data }))
@@ -125,7 +151,7 @@ export default function DashboardPage() {
 
   const fetchRequests = async (userId) => {
     try {
-      const response = await fetch(`/api/dashboard/${userId}`)
+      const response = await residentFetch(`/api/dashboard/${userId}`)
       const data = await response.json()
       setRequests(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -135,7 +161,7 @@ export default function DashboardPage() {
 
   const fetchMessages = async (userId) => {
     try {
-      const response = await fetch(`/api/messages/${userId}`)
+      const response = await residentFetch(`/api/messages/${userId}`)
       const data = await response.json()
       setMessages(Array.isArray(data) ? data : [])
       setLoading(false)
@@ -169,7 +195,7 @@ export default function DashboardPage() {
 
     setIsSending(true)
     try {
-      const response = await fetch('/api/messages', {
+      const response = await residentFetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -192,7 +218,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/logout', { method: 'POST' });
+      await residentFetch('/api/logout', { method: 'POST' });
     } catch(e) {}
     localStorage.removeItem('currentUser')
     navigate('/')
@@ -267,6 +293,7 @@ export default function DashboardPage() {
                     <th>Requested On</th>
                     <th>Type</th>
                     <th>Status</th>
+                    <th>Claimed Date</th>
                     <th>Verification</th>
                     <th>Action</th>
                   </tr>
@@ -280,6 +307,15 @@ export default function DashboardPage() {
                         <span className={`status-badge ${req.process_status === 'Claimed' ? 'status-verified' : 'status-pending'}`}>
                           {req.process_status}
                         </span>
+                      </td>
+                      <td>
+                        {req.process_status === 'Claimed' && req.claimed_at ? (
+                          <span style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '12px' }}>
+                            ✅ {new Date(req.claimed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>—</span>
+                        )}
                       </td>
                       <td>
                         <span className={`status-badge ${req.verification_status === 'Verified' ? 'status-verified' : 'status-pending'}`}>
@@ -444,8 +480,12 @@ export default function DashboardPage() {
                 ) : (
                   viewMockupRequest.certificate_content ? (
                     <div 
-                      style={{ fontSize: '18px', margin: '40px 0', lineHeight: '2', textAlign: 'justify', color: '#334155' }}
-                      dangerouslySetInnerHTML={{ __html: viewMockupRequest.certificate_content }}
+                      style={{ fontSize: '18px', margin: '40px 0', lineHeight: '2', textAlign: 'justify', color: '#334155', position: 'relative' }}
+                      dangerouslySetInnerHTML={{ 
+                        __html: (viewMockupRequest.certificate_content || '')
+                          .replace(/<div style="[^"]*">\s*Manila Seal\s*<\/div>/gi, '<img src="/logo_manila.png" alt="City of Manila Seal" style="width: 50px; height: 50px; object-fit: contain;" />')
+                          .replace(/<div style="width:\s*90px;\s*height:\s*90px;[^"]*">\s*<span>BAGONG<\/span>\s*<span>PILIPINAS<\/span>\s*<\/div>/gi, '<div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;"><img src="/logo_bagong_pilipinas.png" alt="Bagong Pilipinas" style="max-width: 100%; max-height: 100%; object-fit: contain;" /></div>')
+                      }}
                     />
                   ) : (
                     <p style={{ fontSize: '18px', margin: '40px 0', whiteSpace: 'pre-wrap', lineHeight: '2', textAlign: 'justify', color: '#334155' }}>
@@ -471,6 +511,12 @@ export default function DashboardPage() {
                       <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', fontSize: '11px', color: '#475563', lineHeight: '1.4' }}>
                         <div>Validated: <strong>{new Date(viewMockupRequest.verified_at || viewMockupRequest.request_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong></div>
                         <div style={{ color: '#16a34a', fontWeight: '600' }}>Validity: 30 Days</div>
+                      </div>
+                    )}
+                    {viewMockupRequest.process_status === 'Claimed' && viewMockupRequest.claimed_at && (
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', fontSize: '11px', color: '#16a34a', fontWeight: '600', lineHeight: '1.4' }}>
+                        <div>🎁 Claimed On:</div>
+                        <strong>{new Date(viewMockupRequest.claimed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
                       </div>
                     )}
                   </div>

@@ -10,18 +10,21 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async (e) => {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
     setError('')
     setLoading(true)
 
     try {
-      if (!email || !password) {
+      const loginEmail = email.trim()
+      const loginPass = password
+
+      if (!loginEmail || !loginPass) {
         setError('Please fill in all fields')
         setLoading(false)
         return
       }
 
-      if (!email.includes('@')) {
+      if (!loginEmail.includes('@')) {
         setError('Please enter a valid email')
         setLoading(false)
         return
@@ -32,9 +35,10 @@ export default function AdminLoginPage() {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
-          email,
-          password
+          email: loginEmail,
+          password: loginPass
         })
       })
 
@@ -65,6 +69,11 @@ export default function AdminLoginPage() {
     }
   }
 
+  const handleFillDemo = () => {
+    setEmail('sysarch.admin@local')
+    setPassword('Admin@2026!')
+  }
+
   return (
     <div className="auth-container">
       <div className="auth-card">
@@ -82,7 +91,7 @@ export default function AdminLoginPage() {
             <input
               id="email"
               type="email"
-              placeholder="admin@brgy830.gov"
+              placeholder="sysarch.admin@local"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -99,6 +108,23 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
             />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+            <button
+              type="button"
+              onClick={handleFillDemo}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#3b82f6',
+                cursor: 'pointer',
+                fontSize: '12px',
+                textDecoration: 'underline'
+              }}
+            >
+              Fill Default Admin Credentials
+            </button>
           </div>
 
           <button type="submit" className="auth-button" disabled={loading}>

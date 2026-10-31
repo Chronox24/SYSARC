@@ -14,6 +14,8 @@ export default function VerifyCertificatePage() {
   const [expirationDate, setExpirationDate] = useState(null);
   const [daysRemaining, setDaysRemaining] = useState(null);
   const [trackingCode, setTrackingCode] = useState('');
+  const [claimedAt, setClaimedAt] = useState(null);
+  const [processStatus, setProcessStatus] = useState('');
 
   useEffect(() => {
     // Artificial slight delay for a smooth loading animation
@@ -30,6 +32,8 @@ export default function VerifyCertificatePage() {
           setExpirationDate(data.expiration_date || null);
           setDaysRemaining(typeof data.days_remaining === 'number' ? data.days_remaining : null);
           setTrackingCode(data.tracking_code || id);
+          setClaimedAt(data.claimed_at || null);
+          setProcessStatus(data.process_status || '');
           setLoading(false);
         })
         .catch(err => {
@@ -97,6 +101,14 @@ export default function VerifyCertificatePage() {
                     <span className="verify-label">Validation Date:</span>
                     <span className="verify-value" style={{ color: '#16a34a' }}>{formatDate(verifiedAt)}</span>
                   </div>
+                  {claimedAt && (
+                    <div className="verify-row">
+                      <span className="verify-label">Claimed Date:</span>
+                      <span className="verify-value" style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                        {formatDate(claimedAt)}
+                      </span>
+                    </div>
+                  )}
                   <div className="verify-row">
                     <span className="verify-label">Valid Until:</span>
                     <span className="verify-value">{formatDate(expirationDate)}</span>

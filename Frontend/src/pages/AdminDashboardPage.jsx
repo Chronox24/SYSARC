@@ -1,8 +1,15 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import QRCode from 'qrcode'
 import '../styles/AdminFlux.css'
+import '../styles/WordEditor.css'
+
+const getWordCount = (html) => {
+  if (!html) return 0;
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text ? text.split(/\s+/).length : 0;
+};
 
 const DocumentEditor = React.memo(({ initialContent, requestId, onChange }) => {
   return (
@@ -11,200 +18,957 @@ const DocumentEditor = React.memo(({ initialContent, requestId, onChange }) => {
       suppressContentEditableWarning
       dangerouslySetInnerHTML={{ __html: initialContent }}
       onInput={(e) => onChange(e.currentTarget.innerHTML)}
-      style={{ outline: 'none', minHeight: '600px', transition: 'border 0.3s' }}
+      className="word-editor-content"
       title="Click here to type your official document content"
     />
   );
 }, (prevProps, nextProps) => prevProps.requestId === nextProps.requestId);
 
+// --- FLOATING IMAGE COMPONENT (Just like Microsoft Word: Free Movement & Text Overlay) ---
+const FloatingDocumentImage = ({ img, isSelected, onSelect, onUpdate, onDelete }) => {
+  const isFront = img.layer === 'front';
 
-const getCertificateTemplate = (r) => {
-  const isTarget = r.certificate_type === 'Barangay Certificate' || r.certificate_type === 'First Time Job Seeker';
+  const handleMouseDown = (e) => {
+    if (e.button !== 0 || e.target.closest('.word-img-btn') || e.target.closest('.word-img-resize-handle')) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect();
+
+    const startMouseX = e.clientX;
+    const startMouseY = e.clientY;
+    const startX = img.x || 0;
+    const startY = img.y || 0;
+
+    const handleMouseMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - startMouseX;
+      const deltaY = moveEvent.clientY - startMouseY;
+      onUpdate({
+        x: Math.round(startX + deltaX),
+        y: Math.round(startY + deltaY)
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleResizeMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startMouseX = e.clientX;
+    const startWidth = img.width || 150;
+
+    const handleResizeMouseMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - startMouseX;
+      const newWidth = Math.max(40, Math.min(800, Math.round(startWidth + deltaX)));
+      onUpdate({ width: newWidth });
+    };
+
+    const handleResizeMouseUp = () => {
+      window.removeEventListener('mousemove', handleResizeMouseMove);
+      window.removeEventListener('mouseup', handleResizeMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleResizeMouseMove);
+    window.addEventListener('mouseup', handleResizeMouseUp);
+  };
+
+  return (
+    <div
+      className={`word-floating-image-wrapper ${isSelected ? 'selected' : ''}`}
+      style={{
+        position: 'absolute',
+        left: `${img.x || 0}px`,
+        top: `${img.y || 0}px`,
+        width: `${img.width || 150}px`,
+        zIndex: isSelected ? 30 : (isFront ? 20 : 1),
+        cursor: 'move',
+        userSelect: 'none'
+      }}
+      onMouseDown={handleMouseDown}
+      onClick={(e) => { e.stopPropagation(); onSelect(); }}
+    >
+      {/* Visual Image */}
+      <img
+        src={img.src}
+        alt={img.name || 'Attached Element'}
+        style={{
+          width: '100%',
+          height: 'auto',
+          display: 'block',
+          opacity: img.opacity !== undefined ? img.opacity : 1,
+          pointerEvents: 'none',
+          boxShadow: isSelected ? '0 4px 15px rgba(37,99,235,0.25)' : 'none'
+        }}
+        draggable={false}
+      />
+
+      {/* Floating Header Tag Handle (always clickable even when Behind Text) */}
+      <div 
+        className="word-img-pill-handle"
+        style={{
+          position: 'absolute',
+          top: '-24px',
+          left: '0',
+          backgroundColor: isSelected ? '#2563eb' : '#334155',
+          color: '#ffffff',
+          fontSize: '11px',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          zIndex: 35,
+          cursor: 'move',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        }}
+      >
+        <span>✥</span>
+        <span>{img.name || 'Image'}</span>
+        <span style={{ fontSize: '9px', opacity: 0.85, marginLeft: '2px' }}>
+          ({isFront ? 'In Front' : 'Behind Text'})
+        </span>
+      </div>
+
+      {/* Selected Controls & Word-Style Floating Mini-Toolbar */}
+      {isSelected && (
+        <>
+          <div
+            className="word-img-floating-toolbar"
+            style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 28px)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: '#0f172a',
+              color: '#ffffff',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+              zIndex: 40,
+              fontSize: '12px',
+              whiteSpace: 'nowrap'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Overlay Mode Toggle */}
+            <button
+              type="button"
+              className="word-img-btn"
+              title={isFront ? "Click to move Behind Text (Watermark mode)" : "Click to move In Front of Text (Overlay mode)"}
+              onClick={() => onUpdate({ layer: isFront ? 'behind' : 'front' })}
+              style={{
+                backgroundColor: isFront ? '#3b82f6' : '#64748b',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              {isFront ? '🔲 In Front of Text' : '🔳 Behind Text'}
+            </button>
+
+            {/* Opacity Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Opacity:</span>
+              <button
+                type="button"
+                className="word-img-btn"
+                onClick={() => onUpdate({ opacity: 1.0 })}
+                style={{
+                  background: img.opacity === 1 ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  cursor: 'pointer'
+                }}
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                className="word-img-btn"
+                onClick={() => onUpdate({ opacity: 0.6 })}
+                style={{
+                  background: img.opacity === 0.6 ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  cursor: 'pointer'
+                }}
+              >
+                60%
+              </button>
+              <button
+                type="button"
+                className="word-img-btn"
+                onClick={() => onUpdate({ opacity: 0.25 })}
+                style={{
+                  background: img.opacity === 0.25 ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  cursor: 'pointer'
+                }}
+              >
+                25%
+              </button>
+            </div>
+
+            {/* Size adjustments */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <button
+                type="button"
+                className="word-img-btn"
+                title="Decrease size"
+                onClick={() => onUpdate({ width: Math.max(40, (img.width || 150) - 25) })}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                ➖
+              </button>
+              <span style={{ fontSize: '11px', minWidth: '38px', textAlign: 'center' }}>{img.width || 150}px</span>
+              <button
+                type="button"
+                className="word-img-btn"
+                title="Increase size"
+                onClick={() => onUpdate({ width: Math.min(800, (img.width || 150) + 25) })}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                ➕
+              </button>
+            </div>
+
+            {/* Delete button */}
+            <button
+              type="button"
+              className="word-img-btn"
+              title="Remove image from document"
+              onClick={onDelete}
+              style={{
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              🗑️
+            </button>
+          </div>
+
+          {/* Bottom-right Corner Resize Handle */}
+          <div
+            className="word-img-resize-handle"
+            onMouseDown={handleResizeMouseDown}
+            style={{
+              position: 'absolute',
+              right: '-6px',
+              bottom: '-6px',
+              width: '14px',
+              height: '14px',
+              backgroundColor: '#2563eb',
+              border: '2px solid #ffffff',
+              borderRadius: '50%',
+              cursor: 'se-resize',
+              zIndex: 35,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }}
+            title="Drag to resize image"
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
+// Helper: Compile document HTML with embedded floating images
+const compileDocumentWithImages = (htmlContent, images) => {
+  let cleanHtml = (htmlContent || '')
+    .replace(/<!--ATTACHED_IMAGES_START-->[\s\S]*?<!--ATTACHED_IMAGES_END-->/g, '')
+    .trim();
+
+  if (!images || images.length === 0) {
+    return cleanHtml;
+  }
+
+  const imagesJson = JSON.stringify(images);
+  const renderedImages = images.map(img => {
+    return `<div class="word-floating-image-render" style="position: absolute; left: ${img.x || 0}px; top: ${img.y || 0}px; width: ${img.width || 150}px; z-index: ${img.layer === 'front' ? 20 : 1}; opacity: ${img.opacity !== undefined ? img.opacity : 1}; pointer-events: none;"><img src="${img.src}" alt="${img.name || 'Image'}" style="width: 100%; height: auto; display: block;" /></div>`;
+  }).join('\n');
+
+  return `<!--ATTACHED_IMAGES_START-->
+<div id="word-attached-images-meta" data-images='${imagesJson.replace(/'/g, "&apos;")}' style="display: none;"></div>
+<div class="word-attached-images-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+${renderedImages}
+</div>
+<!--ATTACHED_IMAGES_END-->
+${cleanHtml}`;
+};
+
+// Helper: Parse document HTML into text content and interactive image state
+const parseDocumentAndImages = (rawHtml) => {
+  if (!rawHtml) return { cleanContent: '', images: [] };
   
-  if (isTarget) {
-    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
-                                  <!-- PAGE 1 -->
-                                  <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
-                                    <!-- Header -->
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 20px;">
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-                                      </div>
-                                      <div style="flex: 1; text-align: center;">
-                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
-                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
-                                        </div>
-                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
-                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
-                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
-                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
-                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
-                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
-                                      </div>
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
-                                        BAGONG PILIPINAS
-                                      </div>
-                                    </div>
-
-                                    <!-- Main Body Container -->
-                                    <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
-                                      
-                                      <!-- Left Sidebar -->
-                                      <div style="width: 220px; background-color: #9bbcc4; padding: 30px 15px; border-right: 1px solid #000; text-align: center;">
-                                        <h3 style="margin: 0 0 30px 0; font-size: 16px;">Barangay 830,<br/>Zone 90 Dist VI</h3>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">BRGY Chairman</h4>
-                                        <p style="margin: 0 0 20px 0; font-size: 12px; font-weight: bold;">EFREN V. MEDINA</p>
-                                        
-                                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #d32f2f;">BARANGAY<br/>KAGAWAD</h4>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Mercedita O. Lacson</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Catherine S. Gabriel</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Jordan T. Lumanao</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Purisima P. Albasin</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Elnora C. Gamit</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">Lady P. Abad</p>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Annabelle S. Cagat</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SK CHAIRMAN</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Wilton John B. Padlan</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">SECRETARY</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Jonathan C. Florencio Jr.</p>
-                                        
-                                        <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #d32f2f;">TREASURER</h4>
-                                        <p style="margin: 0 0 30px 0; font-size: 12px; font-weight: bold;">Dina J. Pedenes</p>
-                                      </div>
-
-                                      <!-- Right Content -->
-                                      <div style="flex: 1; padding: 40px 30px; text-align: left; display: flex; flex-direction: column;">
-                                        <div>
-                                          <p style="margin: 0 0 30px 0; font-size: 14px; font-weight: bold;">Control No: <span style="text-decoration: underline;">BC-${new Date().getFullYear()}-______</span></p>
-                                          
-                                          <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">BARANGAY CERTIFICATE</h2>
-                                          <p style="text-align: center; margin: 0 0 30px 0; font-size: 14px;">(First Time Jobseekers Assistance Act-RA 11261)</p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
-                                            This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified avail of RA 11261 or the <strong><em>First Time Jobseekers Act of 2019.</em></strong>
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
-                                            I further certify that the holder/bearer was informed of his/her rights, including the duties and responsibilities accorded by RA 11261 through the Oath of Undertaking he/she has signed and executed in the presence of our Barangay Official.
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
-                                            Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong> in the City of Manila.
-                                          </p>
-                                          
-                                          <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
-                                            This certification is valid only for one (1) year from the issuance.
-                                          </p>
-                                        </div>
-                                        
-                                        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 30px;">
-                                          <div>
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">ALBASIN</p>
-                                          </div>
-                                          <div style="width: 250px;">
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
-                                            <p style="margin: 0 0 25px 0; font-size: 14px;">Punong Barangay</p>
-                                            
-                                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                            <p style="margin: 0 0 45px 0; font-size: 14px;">Date</p>
-
-                                            <div style="padding-left: 50px;">
-                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P.</p>
-                                              <p style="margin: 0 0 25px 0; font-size: 14px;">Kagawad</p>
-                                              
-                                              <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <!-- PAGE 2: OATH OF UNDERTAKING -->
-                                  <div style="padding-top: 50px; min-height: 1050px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 0 20px;">
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                                        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-                                      </div>
-                                      <div style="flex: 1; text-align: center;">
-                                        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
-                                          <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; font-size: 8px;">Manila Logo</div>
-                                        </div>
-                                        <p style="margin: 0; font-size: 12px;">Republic of the Philippines</p>
-                                        <p style="margin: 0; font-size: 12px;">City of Manila</p>
-                                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Barangay 830, Zone 90, District VI</p>
-                                        <p style="margin: 0; font-size: 12px;">South Nagtahan, Paco, Manila</p>
-                                        <p style="margin: 0; font-size: 12px;">Email Address: <a href="mailto:barangay830zone90@gmail.com" style="color: blue; text-decoration: underline;">barangay830zone90@gmail.com</a></p>
-                                        <p style="margin: 0; font-size: 12px;">Tel #: 8275-2818</p>
-                                      </div>
-                                      <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-align: center;">
-                                        BAGONG PILIPINAS
-                                      </div>
-                                    </div>
-                                    
-                                    <div style="border-bottom: 4px solid #000; margin-bottom: 2px;"></div>
-                                    <div style="border-bottom: 1px solid #000; margin-bottom: 40px;"></div>
-
-                                    <h2 style="text-align: center; margin: 0 0 40px 0; font-size: 20px;">OATH OF UNDERTAKING</h2>
-                                    
-                                    <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
-                                      This is to certify that, <strong>${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</strong>, ${r.age || '___'} years old, ${r.civil_status || 'Single'}, residing at ${r.home_address || r.address || '___'} is a jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">Two years (02)</span> is a qualified and is availing the benefits of Republic Act 11261, otherwise known as the First Time Jobseekers Act of 2019, do hereby declare, agree, and undertake to abide and be bound by the following:
-                                    </p>
-
-                                    <ol style="font-size: 14px; line-height: 1.6; text-align: justify; padding-left: 60px; margin-bottom: 50px;">
-                                      <li style="margin-bottom: 10px;">That this is the first time that I will actively look for a job and therefore requesting that a Barangay Certification be issued in my favor to avail the benefits of the law.</li>
-                                      <li style="margin-bottom: 10px;">That I am aware that the benefits and privilege/s under the said law shall be valid only for one (1) year from the date that the Barangay Certification is issued.</li>
-                                      <li style="margin-bottom: 10px;">That I can avail the benefits of the law only once.</li>
-                                      <li style="margin-bottom: 10px;">That I understand that my personal information shall be included in the Roster/List of First Time Jobseekers and will not be used for any unlawful purpose.</li>
-                                      <li style="margin-bottom: 10px;">That I will inform and/or report to the Barangay personally, through text or other means, or through my family/relatives once I get employed; and</li>
-                                      <li style="margin-bottom: 10px;">That I am not beneficiary of the Job Start Program under R.A. No. 10869 and other laws that give similar exemptions for the documents or transactions exempted under R.A. No. 11261</li>
-                                      <li style="margin-bottom: 10px;">That if issued the requested Certification, I will not use the same in any fraud, neither falsify nor help and/or assist in the fabrication of the said certification.</li>
-                                      <li style="margin-bottom: 10px;">That this undertaking is made solely for the purpose of obtaining a Barangay Certification consistent with the objective of R.A. No. 11261 and not for any other purpose.</li>
-                                      <li style="margin-bottom: 10px;">That I consent to the use of my personal information pursuant</li>
-                                      <li>to the Data Privacy Act and other applicable laws, rules, and regulations.</li>
-                                    </ol>
-
-                                    <p style="text-align: left; margin: 0 0 60px 0; font-size: 14px; line-height: 1.6;">
-                                      Signed this <strong><span style="text-decoration: underline;">${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></strong>, in the City of Manila.
-                                    </p>
-
-                                    <div style="margin-left: 50%;">
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${(r.full_name || r.resident_name || 'Resident Name').toUpperCase()}</p>
-                                      <p style="margin: 0 0 50px 0; font-size: 14px;">First Time Jobseekers</p>
-                                      
-                                      <p style="margin: 0 0 40px 0; font-size: 14px;">Witnessed by:</p>
-                                      
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PURISIMA P. ALBASIN</p>
-                                      <p style="margin: 0 0 30px 0; font-size: 14px;">Kagawad</p>
-                                      
-                                      <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; text-decoration: underline;">${new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}</p>
-                                      <p style="margin: 0 0 20px 0; font-size: 14px;">Date</p>
-                                    </div>
-                                  </div>
-                                </div>`;
+  const metaMatch = rawHtml.match(/id="word-attached-images-meta"\s+data-images='([^']+)'/);
+  let images = [];
+  if (metaMatch && metaMatch[1]) {
+    try {
+      images = JSON.parse(metaMatch[1].replace(/&apos;/g, "'"));
+    } catch (e) {
+      console.warn('Could not parse attached images:', e);
+    }
   }
   
+  const cleanContent = rawHtml
+    .replace(/<!--ATTACHED_IMAGES_START-->[\s\S]*?<!--ATTACHED_IMAGES_END-->/g, '')
+    .trim();
+    
+  return { cleanContent, images };
+};
+
+
+const getCertificateTemplate = (r, overrideType = null) => {
+  const type = overrideType || r.certificate_type || 'Barangay Certificate';
   const residentName = (r.full_name || r.resident_name || 'Resident Name').toUpperCase();
-  const age = r.age || '___';
+  const age = r.age ? `${r.age}` : '___';
   const civilStatus = r.civil_status || 'Single';
-  const address = r.home_address || r.address || '___';
+  const address = r.home_address || r.address || 'Barangay 830, Zone 90, Manila';
+  const nationality = r.nationality || 'Filipino';
+  const purpose = (r.purpose || '').trim();
+  const purposeUpper = purpose ? purpose.toUpperCase() : 'WHATEVER LEGAL PURPOSE IT MAY SERVE';
+  const tracking = (r.tracking_code || '830000').slice(0, 6).toUpperCase();
+  const year = new Date().getFullYear();
+  const controlNo = `BC-${year}-${tracking}`;
+
+  const now = new Date();
+  const dayNum = now.getDate();
+  const daySuffix = (d) => {
+    if (d > 3 && d < 21) return 'th';
+    switch (d % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  const issueDay = `${dayNum}${daySuffix(dayNum)}`;
+  const issueMonthYear = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const fullDateStr = now.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
+
+  // Pronoun detection
+  const pLower = (purpose + ' ' + (r.gender || '') + ' ' + (r.civil_status || '') + ' ' + residentName).toLowerCase();
+  const isFemale = pLower.includes('female') || pLower.includes('mrs') || pLower.includes('mother') || pLower.includes('daughter') ||
+    /\b(maria|mary|elena|aileen|ana|joan|lolly|norma|wenda|lea|fatima|daenishe|melissa|belinda|emily|jacquelyn|pedencia|paz|rose|grace|faith|zakia|solita|pierre)\b/i.test(residentName);
   
-  return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff; padding: 40px;">
-    <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 24px;">${(r.certificate_type || 'CERTIFICATE').toUpperCase()}</h2>
-    <p style="text-align: justify; text-indent: 40px; margin-top: 40px; font-size: 16px; line-height: 1.6;">
-      This is to certify that, <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at ${address} is a jurisdiction of Barangay 830, Zone 90, District VI.
-    </p>
-    <p style="text-align: right; margin-top: 60px;">
-      Signed this <strong>${new Date().toLocaleDateString('en-US', { day: '2-digit' })}th day of ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong>.
-    </p>
+  const heShe = isFemale ? 'she' : 'he';
+  const heSheUpper = isFemale ? 'She' : 'He';
+  const hisHer = isFemale ? 'her' : 'his';
+  const hisHerUpper = isFemale ? 'Her' : 'His';
+  const himHer = isFemale ? 'her' : 'him';
+
+  // Standard Header HTML
+  const headerHtml = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 15px;">
+      <div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;">
+        <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+      </div>
+      <div style="flex: 1; text-align: center; line-height: 1.3;">
+        <div style="display: flex; justify-content: center; margin-bottom: 4px;">
+          <img src="/logo_manila.png" alt="City of Manila Seal" style="width: 50px; height: 50px; object-fit: contain;" />
+        </div>
+        <p style="margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
+        <p style="margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase;">City of Manila</p>
+        <p style="margin: 1px 0; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; color: #0f172a;">Barangay 830, Zone 90, District VI</p>
+        <p style="margin: 0; font-size: 11px; color: #334155;">South Nagtahan, Paco, Manila</p>
+        <p style="margin: 0; font-size: 10.5px; color: #334155;">Email: <a href="mailto:barangay830zone90@gmail.com" style="color: #1d4ed8; text-decoration: underline;">barangay830zone90@gmail.com</a> | Tel #: 8275-2818</p>
+      </div>
+      <div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;">
+        <img src="/logo_bagong_pilipinas.png" alt="Bagong Pilipinas" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+      </div>
+    </div>
+  `;
+
+  // Standard Officials Left Sidebar HTML
+  const sidebarHtml = `
+    <div style="width: 200px; background-color: #9bbcc4; padding: 22px 10px; border-right: 1px solid #000; text-align: center; box-sizing: border-box; flex-shrink: 0;">
+      <h3 style="margin: 0 0 16px 0; font-size: 14px; font-weight: bold; text-transform: uppercase; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 6px;">Barangay 830<br/><span style="font-size: 12px; font-weight: 600;">Zone 90 Dist VI</span></h3>
+      
+      <h4 style="margin: 0 0 2px 0; font-size: 12px; color: #991b1b; font-weight: bold; text-transform: uppercase;">BRGY Chairman</h4>
+      <p style="margin: 0 0 14px 0; font-size: 11px; font-weight: bold; color: #000;">EFREN V. MEDINA</p>
+      
+      <h4 style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; font-weight: bold; text-transform: uppercase;">BARANGAY<br/>KAGAWAD</h4>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Mercedita O. Lacson</p>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Catherine S. Gabriel</p>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Jordan T. Lumanao</p>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Purisima P. Albasin</p>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Elnora C. Gamit</p>
+      <p style="margin: 0 0 5px 0; font-size: 10.5px; font-weight: bold; color: #000;">Lady P. Abad</p>
+      <p style="margin: 0 0 16px 0; font-size: 10.5px; font-weight: bold; color: #000;">Annabelle S. Cagat</p>
+      
+      <h4 style="margin: 0 0 2px 0; font-size: 12px; color: #991b1b; font-weight: bold; text-transform: uppercase;">SK CHAIRMAN</h4>
+      <p style="margin: 0 0 16px 0; font-size: 10.5px; font-weight: bold; color: #000;">Wilton John B. Padlan</p>
+      
+      <h4 style="margin: 0 0 2px 0; font-size: 12px; color: #991b1b; font-weight: bold; text-transform: uppercase;">SECRETARY</h4>
+      <p style="margin: 0 0 16px 0; font-size: 10.5px; font-weight: bold; color: #000;">Jonathan C. Florencio Jr.</p>
+      
+      <h4 style="margin: 0 0 2px 0; font-size: 12px; color: #991b1b; font-weight: bold; text-transform: uppercase;">TREASURER</h4>
+      <p style="margin: 0 0 8px 0; font-size: 10.5px; font-weight: bold; color: #000;">Dina J. Pedenes</p>
+    </div>
+  `;
+
+  // Standard Chairman Signature Block
+  const standardSignatureBlock = `
+    <div style="margin-top: auto; padding-top: 25px;">
+      <div style="margin-left: 45%; text-align: center; margin-bottom: 25px;">
+        <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold; text-decoration: underline; color: #000;">EFREN V. MEDINA</p>
+        <p style="margin: 0; font-size: 13px; font-weight: 500; color: #111;">Punong Barangay</p>
+      </div>
+      
+      <div style="border-top: 1px solid #000; padding-top: 8px; font-size: 11px; font-style: italic; color: #334155; line-height: 1.4;">
+        <p style="margin: 0;">Not valid if with erasure and without dry seal.</p>
+        <p style="margin: 0;">Valid for (6) months after date of issue.</p>
+      </div>
+    </div>
+  `;
+
+  // 1. FIRST TIME JOB SEEKER (RA 11261) - 2 PAGES
+  if (type === 'First Time Job Seeker') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <!-- PAGE 1: CERTIFICATE -->
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">BARANGAY CERTIFICATE</h2>
+              <p style="text-align: center; margin: 0 0 25px 0; font-size: 13px; font-weight: 600; color: #334155;">(First Time Jobseekers Assistance Act - RA 11261)</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that, <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at <strong>${address}</strong> is under the jurisdiction of Barangay 830, Zone 90, District VI, for <span style="text-decoration: underline;">${age || 'Two (2)'} years</span>, is a qualified availee of RA 11261 or the <strong><em>First Time Jobseekers Act of 2019.</em></strong>
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                I further certify that the holder/bearer was informed of his/her rights, including the duties and responsibilities accorded by RA 11261 through the <strong>Oath of Undertaking</strong> he/she has signed and executed in the presence of our Barangay Official.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                Signed this <strong><span style="text-decoration: underline;">${issueDay} day of ${issueMonthYear}</span></strong> in the City of Manila.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8; font-weight: 500;">
+                This certification is valid only for <strong>one (1) year</strong> from the issuance.
+              </p>
+            </div>
+            
+            <div style="margin-top: auto; padding-top: 25px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
+                <div style="width: 45%; text-align: center;">
+                  <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">ELNORA C. GAMIT</p>
+                  <p style="margin: 0; font-size: 12px;">Barangay Kagawad</p>
+                  <p style="margin: 10px 0 0 0; font-size: 11px; color: #475569;">${fullDateStr}</p>
+                </div>
+                <div style="width: 45%; text-align: center;">
+                  <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
+                  <p style="margin: 0; font-size: 12px;">Punong Barangay</p>
+                  <p style="margin: 10px 0 0 0; font-size: 11px; color: #475569;">${fullDateStr}</p>
+                </div>
+              </div>
+              <div style="border-top: 1px solid #000; padding-top: 8px; font-size: 11px; font-style: italic; color: #334155;">
+                <p style="margin: 0;">Not valid without official Barangay dry seal.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE 2: OATH OF UNDERTAKING -->
+      <div class="print-page" style="position: relative; padding: 30px 40px; border: 1px solid #000; min-height: 850px; box-sizing: border-box; background: #fff;">
+        <h2 style="text-align: center; margin: 0 0 5px 0; font-size: 20px; font-weight: bold;">OATH OF UNDERTAKING</h2>
+        <h3 style="text-align: center; margin: 0 0 25px 0; font-size: 14px; font-weight: normal; color: #475569;">(Republic Act 11261 - First Time Jobseekers Assistance Act)</h3>
+
+        <p style="text-align: justify; text-indent: 40px; margin: 0 0 15px 0; font-size: 13px; line-height: 1.7;">
+          This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at <strong>${address}</strong> is under the jurisdiction of Barangay 830, Zone 90, District VI, for ${age || 'Two (2)'} years, is qualified and availing the benefits of Republic Act 11261, otherwise known as the First Time Jobseekers Act of 2019, do hereby declare, agree, and undertake to abide and be bound by the following:
+        </p>
+
+        <ol style="margin: 0 0 20px 20px; padding: 0; font-size: 12.5px; line-height: 1.6;">
+          <li style="margin-bottom: 8px;">That this is the first time that I will actively look for a job and therefore requesting that a Barangay Certification be issued in my favor to avail the benefits of the law.</li>
+          <li style="margin-bottom: 8px;">That I am aware that the benefits and privilege/s under the said law shall be valid only for one (1) year from the date that the Barangay Certification is issued.</li>
+          <li style="margin-bottom: 8px;">That I can avail the benefits of the law only once.</li>
+          <li style="margin-bottom: 8px;">That I understand that my personal information shall be included in the Roster/List of First Time Jobseekers and will not be used for any unlawful purpose.</li>
+          <li style="margin-bottom: 8px;">That I will inform and/or report to the Barangay personally, through text or other means, or through my family/relatives once I get employed; and</li>
+          <li style="margin-bottom: 8px;">That I am not beneficiary of the Job Start Program under R.A. No. 10869 and other laws that give similar exemptions for the documents or transactions exempted under R.A. No. 11261.</li>
+          <li style="margin-bottom: 8px;">That if issued the requested Certification, I will not use the same in any fraud, neither falsify nor help and/or assist in the fabrication of the said certification.</li>
+          <li style="margin-bottom: 8px;">That this undertaking is made solely for the purpose of obtaining a Barangay Certification consistent with the objective of R.A. No. 11261 and not for any other purpose.</li>
+          <li>That I consent to the use of my personal information pursuant to the Data Privacy Act and other applicable laws, rules, and regulations.</li>
+        </ol>
+
+        <p style="text-align: left; margin: 0 0 40px 0; font-size: 13px;">
+          Signed this <strong>${issueDay} day of ${issueMonthYear}</strong>, in the City of Manila.
+        </p>
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px;">
+          <div style="width: 45%; text-align: center;">
+            <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">${residentName}</p>
+            <p style="margin: 0 0 25px 0; font-size: 12px;">First Time Jobseeker</p>
+            
+            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold;">Witnessed by:</p>
+            <p style="margin: 15px 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">ELNORA C. GAMIT</p>
+            <p style="margin: 0; font-size: 12px;">Barangay Kagawad</p>
+          </div>
+          <div style="width: 45%; text-align: center;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold;">Approved by:</p>
+            <p style="margin: 20px 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
+            <p style="margin: 0 0 25px 0; font-size: 12px;">Punong Barangay</p>
+            <p style="margin: 0; font-size: 12px; color: #475569;">Date: <span style="text-decoration: underline;">${fullDateStr}</span></p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 2. BARANGAY CLEARANCE
+  if (type === 'Barangay Clearance') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 15px 0; font-size: 24px; font-weight: bold; letter-spacing: 1px;">BARANGAY CLEARANCE</h2>
+              
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, ${nationality}, residing at <strong>${address}</strong>, is a bona-fide resident of Barangay 830, Zone 90, District VI, City of Manila.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This further certifies that the above-named person is personally known to me to be of <strong>good moral character</strong>, a peaceful and law-abiding citizen, and has <strong>NO DEROGATORY RECORD</strong> or pending criminal charges filed against ${himHer} in this office.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+                This clearance is being issued upon the request of the interested party for <strong>${purposeUpper || 'LOCAL EMPLOYMENT / ID APPLICATION'}</strong> and for whatever legal purpose it may serve ${himHer} best.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+                Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            ${standardSignatureBlock}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 3. CERTIFICATE OF INDIGENCY
+  if (type === 'Certificate of Indigency') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 20px 0; font-size: 24px; font-weight: bold; letter-spacing: 1px;">CERTIFICATE OF INDIGENCY</h2>
+              
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at <strong>${address}</strong> is a Bonafide resident of Barangay 830, Zone 90, District VI, Manila.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This further certifies that ${heShe} belongs to the many indigent families living in this Barangay and is considered one among the families living below the poverty line or indigent families and a low-income earner.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                ${heSheUpper} is personally known to have good moral Character and without any derogatory record on file.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+                This certificate is issued to subject individual for ${hisHer} application for <strong>${purposeUpper || 'FINANCIAL ASSISTANCE / MEDICAL ASSISTANCE'}</strong> and for whatever legal purpose it may serve ${himHer} best.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+                Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            ${standardSignatureBlock}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 4. CERTIFICATE OF RESIDENCY
+  if (type === 'Certificate of Residency') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 20px 0; font-size: 24px; font-weight: bold; letter-spacing: 1px;">CERTIFICATE OF RESIDENCY</h2>
+              
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">To whom it may concern:</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, presently residing at <strong>${address}</strong> is a Bonafide resident of Barangay 830 Zone 90, District VI City of Manila.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This further certifies that ${heShe} has been permanently residing in this jurisdiction and is known in the community to be of good moral character, law-abiding, and peaceful resident.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+                This certification is issued upon request of the above-named individual for <strong>${purposeUpper || 'PROOF OF RESIDENCY'}</strong> and for whatever legal purpose it may serve ${himHer} best.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+                Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            ${standardSignatureBlock}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 5. GOOD MORAL FOR AFP / PNP
+  if (type === 'Good moral for AFP/PNP') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 24px; font-weight: bold; letter-spacing: 1px;">CERTIFICATION</h2>
+              <p style="text-align: center; margin: 0 0 20px 0; font-size: 13px; font-weight: bold; color: #475569;">(BARANGAY CLEARANCE & GOOD MORAL STANDING)</p>
+              
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that, <strong>${residentName}</strong>, of legal age, ${age} years old, ${civilStatus}, known to be a resident of this Barangay with postal address at <strong>${address}</strong>.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                <strong>${residentName}</strong> is known to me to be of good moral character and a law-abiding citizen and no derogatory record in this barangay.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify further that the subject person mentioned above and ${hisHer} immediate family members/relatives are <strong>not involved in any illegal activities, not listed in BADAC Watchlist of drug personalities and not connected nor members of any left leaning group/organization</strong>.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+                This certification is being issued upon the request of the interested party for ${hisHer} <strong>${purposeUpper || 'AFP / PNP APPLICATION / RECRUITMENT'}</strong> and for whatever legal purposes it may serve ${himHer} best.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+                Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            ${standardSignatureBlock}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 6. GOOD MORAL FOR EDUCATION
+  if (type === 'Good moral for education') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 22px; font-weight: bold; letter-spacing: 1px;">CERTIFICATE OF GOOD MORAL CHARACTER</h2>
+              <p style="text-align: center; margin: 0 0 20px 0; font-size: 13px; font-weight: 600; color: #475569;">(FOR ACADEMIC & SCHOLARSHIP REQUIREMENTS)</p>
+              
+              <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, Filipino, residing at <strong>${address}</strong> is a bona fide resident of Barangay 830, Zone 90, District VI, City of Manila.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+                This further certifies that the subject student/individual is personally known to me to be a person of <strong>exemplary good moral character</strong>, law-abiding, with a reputation for integrity and diligence, and has <strong>no derogatory record</strong> or behavioral complaint on file in this office.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+                This certification is issued upon the request of the above-named student/applicant for <strong>${purposeUpper || 'EDUCATIONAL ENROLLMENT / SCHOLARSHIP REQUIREMENTS'}</strong> and for whatever legal purpose it may serve ${himHer} best.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+                Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            ${standardSignatureBlock}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 7. BARANGAY ID
+  if (type === 'Barangay ID') {
+    return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+      <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+        ${headerHtml}
+        <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+          ${sidebarHtml}
+          <div style="flex: 1; padding: 30px 22px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <p style="margin: 0 0 15px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+              
+              <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">BARANGAY CERTIFICATE</h2>
+              <p style="text-align: center; margin: 0 0 15px 0; font-size: 12px; font-weight: 600; color: #475569;">(BARANGAY IDENTIFICATION & RESIDENCY)</p>
+              
+              <p style="margin: 0 0 12px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+              
+              <p style="text-align: justify; text-indent: 30px; margin: 0 0 14px 0; font-size: 13.5px; line-height: 1.6;">
+                THIS IS TO CERTIFY that the individual whose picture and details appear below is a Bonafide resident of Barangay 830, Zone 90 District VI, City of Manila, with verified records on file in this office;
+              </p>
+
+              <div style="border: 2px solid #0f172a; border-radius: 6px; padding: 12px 16px; margin: 12px 0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1; font-size: 12.5px; line-height: 1.8; color: #0f172a;">
+                  <p style="margin: 0;"><strong>FULL NAME:</strong> <span style="text-decoration: underline; font-weight: bold;">${residentName}</span></p>
+                  <p style="margin: 0;"><strong>AGE / CIVIL STATUS:</strong> ${age} years old / ${civilStatus}</p>
+                  <p style="margin: 0;"><strong>NATIONALITY:</strong> ${nationality}</p>
+                  <p style="margin: 0;"><strong>ADDRESS:</strong> ${address}</p>
+                  <p style="margin: 0;"><strong>PURPOSES:</strong> ${purposeUpper || 'BARANGAY ID APPLICATION'}</p>
+                </div>
+                <div style="width: 100px; height: 100px; border: 2px dashed #64748b; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; text-align: center; font-size: 10px; color: #475569; font-weight: bold; margin-left: 12px; flex-shrink: 0;">
+                  <span>2X2</span>
+                  <span>PHOTO</span>
+                  <span style="font-size: 8px; font-weight: normal; color: #94a3b8;">ATTACH HERE</span>
+                </div>
+              </div>
+              
+              <p style="text-align: justify; text-indent: 30px; margin: 0 0 12px 0; font-size: 13.5px; line-height: 1.6;">
+                THIS IS TO FURTHER CERTIFY that according to records on file, the aforementioned individual is a peaceful, law-abiding citizen with no derogatory record in this community.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 30px; margin: 0 0 12px 0; font-size: 13.5px; line-height: 1.6;">
+                THIS CERTIFICATE is being issued upon the request of the above-named resident specifically for <strong>${purposeUpper || 'BARANGAY ID / LEGAL PURPOSES'}</strong> and for whatever legal intent or assistance it may serve.
+              </p>
+              
+              <p style="text-align: justify; text-indent: 30px; margin: 0 0 20px 0; font-size: 13.5px; line-height: 1.6;">
+                Given this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Office of the Punong Barangay, Barangay 830 Hall, Zone 90, District VI, City of Manila.
+              </p>
+            </div>
+            
+            <div style="margin-top: auto; padding-top: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
+                <div style="width: 45%; text-align: center;">
+                  <div style="border-bottom: 1px solid #000; height: 30px; margin-bottom: 4px;"></div>
+                  <p style="margin: 0; font-size: 12px; font-weight: bold;">Resident's Signature</p>
+                </div>
+                <div style="width: 45%; text-align: center;">
+                  <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; text-decoration: underline;">EFREN V. MEDINA</p>
+                  <p style="margin: 0; font-size: 12px;">Punong Barangay</p>
+                </div>
+              </div>
+              <div style="border-top: 1px solid #000; padding-top: 8px; font-size: 11px; font-style: italic; color: #334155;">
+                <p style="margin: 0;">Not valid if with erasure and without dry seal.</p>
+                <p style="margin: 0;">Valid for (6) months after date of issue.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 8. BARANGAY CERTIFICATE (WITH SMART DETECTION)
+  const pCheck = purpose.toLowerCase();
+  let certSubtitle = '';
+  let certBodyParagraphs = '';
+
+  if (pCheck.includes('solo parent') || pCheck.includes('ra 8972') || pCheck.includes('solo')) {
+    certSubtitle = `(Solo Parent Welfare Act - RA 8972)`;
+    certBodyParagraphs = `
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This is to certify that, <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at <strong>${address}</strong> is known as stated by the law RA 8972 also known as <strong><em>"Solo Parent Welfare Act Section No. 3, (a)."</em></strong>
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        As foregoing statement by subject individual and intent for the purpose for <strong>REGISTRATION / RENEWAL OF SOLO PARENT ID</strong> at Manila Department of Social Welfare District Welfare Office VI.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+        This certification is issued upon request of the above-named person for ${hisHer} application and for whatever legal purpose it may serve ${himHer} best.
+      </p>
+    `;
+  } else if (pCheck.includes('pwd') || pCheck.includes('disability')) {
+    certSubtitle = `(PWD ID Application / Updating)`;
+    certBodyParagraphs = `
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, residing at <strong>${address}</strong> is a Bonafide resident of Barangay 830 Zone 90, District VI City of Manila.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        As foregoing statement by subject individual and intent for the purpose for <strong>PWD ID APPLICATION / UPDATING</strong> at Manila Department of Social Welfare District Welfare Office VI.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+        This certification is issued upon request of the above-named individual and for whatever legal purpose it may serve ${himHer} best.
+      </p>
+    `;
+  } else if (pCheck.includes('unemploy') || pCheck.includes('jobless') || pCheck.includes('no income')) {
+    certSubtitle = `(CERTIFICATE OF UNEMPLOYMENT)`;
+    certBodyParagraphs = `
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This is to certify that, <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, is a resident of this Barangay and presently residing at <strong>${address}</strong>. That the above-mentioned person is currently unemployed and has no regular income.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+        This certification is issued upon the request of the above-named person for <strong>${purposeUpper || 'SCHOLARSHIP / FINANCIAL REQUIREMENTS'}</strong> and for whatever legal purpose it may serve ${himHer} best.
+      </p>
+    `;
+  } else if (pCheck.includes('close') || pCheck.includes('closure') || pCheck.includes('retire') || pCheck.includes('no business')) {
+    certSubtitle = `(BUSINESS CLOSURE / CESSATION OF OPERATIONS)`;
+    certBodyParagraphs = `
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This is to certify that <strong>${residentName}</strong>, of legal age, is a resident / registered stall owner located at <strong>${address}</strong> within the Jurisdiction of Barangay 830, Zone 90, District VI, City of Manila.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        Further certifies that said business / establishment is already <strong>CLOSED / CEASED OPERATIONS</strong>.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+        This certification is issued upon the request of the above-named person for ${hisHer} application to close the business at the City of Manila Permit Section and for whatever legal purpose it may serve ${himHer} best.
+      </p>
+    `;
+  } else {
+    certSubtitle = purposeUpper ? `(${purposeUpper})` : '';
+    certBodyParagraphs = `
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This is to certify that <strong>${residentName}</strong>, ${age} years old, ${civilStatus}, presently residing at <strong>${address}</strong> is a Bonafide resident of Barangay 830 Zone 90, District VI City of Manila.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 18px 0; font-size: 14px; line-height: 1.8;">
+        This further certifies that ${heShe} is known in the community to be of good moral character, law-abiding, and a peaceful resident with no derogatory record in this barangay.
+      </p>
+      <p style="text-align: justify; text-indent: 40px; margin: 0 0 20px 0; font-size: 14px; line-height: 1.8;">
+        This certification is issued upon request of the above-named individual for <strong>${purposeUpper || 'WHATEVER LEGAL PURPOSE IT MAY SERVE'}</strong>.
+      </p>
+    `;
+  }
+
+  return `<div style="font-family: Arial, sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; background: #fff;">
+    <div class="print-page" style="page-break-after: always; break-after: page; position: relative; padding-bottom: 20px;">
+      ${headerHtml}
+      <div class="print-body" style="display: flex; border: 1px solid #000; min-height: 800px;">
+        ${sidebarHtml}
+        <div style="flex: 1; padding: 35px 25px; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">Control No: <span style="text-decoration: underline;">${controlNo}</span></p>
+            
+            <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 24px; font-weight: bold; letter-spacing: 1px;">BARANGAY CERTIFICATE</h2>
+            ${certSubtitle ? `<p style="text-align: center; margin: 0 0 20px 0; font-size: 13px; font-weight: 600; color: #475569;">${certSubtitle}</p>` : '<div style="margin-bottom: 20px;"></div>'}
+            
+            <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: bold;">TO WHOM IT MAY CONCERN:</p>
+            
+            ${certBodyParagraphs}
+            
+            <p style="text-align: justify; text-indent: 40px; margin: 0 0 25px 0; font-size: 14px; line-height: 1.8;">
+              Issued this <strong>${issueDay} day of ${issueMonthYear}</strong> at the Barangay 830 Hall, Zone 90, District VI, City of Manila.
+            </p>
+          </div>
+          
+          ${standardSignatureBlock}
+        </div>
+      </div>
+    </div>
   </div>`;
 };
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
+
+  // Flux Notification Bar State
+  const [notification, setNotification] = useState(null) // { id, message, type: 'success'|'error'|'warning'|'info', duration }
+  const notificationTimeoutRef = useRef(null)
+
+  const showNotification = useCallback((message, type = 'success', duration = 4000) => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+    }
+    const id = Date.now()
+    setNotification({ id, message, type, duration })
+    if (duration > 0) {
+      notificationTimeoutRef.current = setTimeout(() => {
+        setNotification(prev => (prev?.id === id ? null : prev))
+      }, duration)
+    }
+  }, [])
+
+  const dismissNotification = useCallback(() => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+    }
+    setNotification(null)
+  }, [])
+
   const [admin, setAdmin] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [certificateRequests, setCertificateRequests] = useState([])
@@ -234,6 +998,369 @@ export default function AdminDashboardPage() {
   const [editorMode, setEditorMode] = useState('text')
   const [visibleToResident, setVisibleToResident] = useState('text')
   const [qrDataUrl, setQrDataUrl] = useState(null)
+  const [activeRibbonTab, setActiveRibbonTab] = useState('Home')
+  const [pageOrientation, setPageOrientation] = useState('portrait')
+  const [pageMargins, setPageMargins] = useState('normal')
+  const [pageBorder, setPageBorder] = useState('none')
+  const [pageWatermark, setPageWatermark] = useState(false)
+  const [pageLineHeight, setPageLineHeight] = useState('1.6')
+  const [isSavingCertificate, setIsSavingCertificate] = useState(false)
+  const [editorClaimedAt, setEditorClaimedAt] = useState('')
+  const [analyticsYear, setAnalyticsYear] = useState('All')
+  const [analyticsMonth, setAnalyticsMonth] = useState('All')
+  const [showExtractModal, setShowExtractModal] = useState(false)
+  const [authError, setAuthError] = useState(false)
+  const [attachedImages, setAttachedImages] = useState([])
+  const [selectedImageId, setSelectedImageId] = useState(null)
+  const [selectedTemplateName, setSelectedTemplateName] = useState('')
+
+  const handleApplyTemplate = (templateName) => {
+    if (!selectedRequest || !templateName) return;
+    const newHtml = getCertificateTemplate(selectedRequest, templateName);
+    const parsed = parseDocumentAndImages(newHtml);
+    setEditorContent(parsed.cleanContent);
+    if (parsed.images && parsed.images.length > 0) {
+      setAttachedImages(parsed.images);
+    }
+    setSelectedTemplateName(templateName);
+  };
+  const imageFileInputRef = useRef(null)
+
+  const handleImageFileUpload = (e) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const newImg = {
+        id: 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        src: event.target.result,
+        x: 80,
+        y: 100,
+        width: 160,
+        layer: 'front',
+        opacity: 1
+      };
+      setAttachedImages(prev => [...prev, newImg]);
+      setSelectedImageId(newImg.id);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = null;
+  };
+
+  const addPresetImage = (src, name, layer = 'front', opacity = 1, width = 120, x = 60, y = 60) => {
+    const newImg = {
+      id: 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      name: name,
+      src: src,
+      x: x,
+      y: y,
+      width: width,
+      layer: layer,
+      opacity: opacity
+    };
+    setAttachedImages(prev => [...prev, newImg]);
+    setSelectedImageId(newImg.id);
+  };
+
+  const addOfficialSealStamp = () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+      <circle cx="100" cy="100" r="94" fill="none" stroke="#dc2626" stroke-width="4" stroke-dasharray="6,3"/>
+      <circle cx="100" cy="100" r="86" fill="none" stroke="#dc2626" stroke-width="2"/>
+      <circle cx="100" cy="100" r="62" fill="none" stroke="#dc2626" stroke-width="1.5"/>
+      <path id="curveTop" d="M 25 100 A 75 75 0 0 1 175 100" fill="none"/>
+      <path id="curveBottom" d="M 175 100 A 75 75 0 0 1 25 100" fill="none"/>
+      <text font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#dc2626" letter-spacing="2">
+        <textPath href="#curveTop" startOffset="50%" text-anchor="middle">BARANGAY 830 ZONE 90</textPath>
+      </text>
+      <text font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#dc2626" letter-spacing="1.5">
+        <textPath href="#curveBottom" startOffset="50%" text-anchor="middle">CITY OF MANILA • OFFICIAL SEAL</textPath>
+      </text>
+      <polygon points="100,68 104,80 116,80 106,88 110,100 100,92 90,100 94,88 84,80 96,80" fill="#dc2626"/>
+      <text x="100" y="118" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#dc2626">OFFICIAL</text>
+      <text x="100" y="132" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#dc2626">DOCUMENT</text>
+    </svg>`;
+    const src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    addPresetImage(src, 'Official Seal', 'behind', 0.45, 170, 320, 350);
+  };
+
+  const updateAttachedImage = (id, updates) => {
+    setAttachedImages(prev => prev.map(img => img.id === id ? { ...img, ...updates } : img));
+  };
+
+  const deleteAttachedImage = (id) => {
+    setAttachedImages(prev => prev.filter(img => img.id !== id));
+    if (selectedImageId === id) setSelectedImageId(null);
+  };
+
+  const insertOfficialHeader = () => {
+    const html = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 15px;">
+        <div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;">
+          <img src="/logo_brgy.png" alt="Brgy Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+        </div>
+        <div style="flex: 1; text-align: center; line-height: 1.3;">
+          <div style="display: flex; justify-content: center; margin-bottom: 4px;">
+            <img src="/logo_manila.png" alt="City of Manila Seal" style="width: 50px; height: 50px; object-fit: contain;" />
+          </div>
+          <p style="margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
+          <p style="margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase;">City of Manila</p>
+          <p style="margin: 1px 0; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; color: #0f172a;">Barangay 830, Zone 90, District VI</p>
+          <p style="margin: 0; font-size: 11px; color: #334155;">South Nagtahan, Paco, Manila</p>
+          <p style="margin: 0; font-size: 10.5px; color: #334155;">Email: <a href="mailto:barangay830zone90@gmail.com" style="color: #1d4ed8; text-decoration: underline;">barangay830zone90@gmail.com</a> | Tel #: 8275-2818</p>
+        </div>
+        <div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;">
+          <img src="/logo_bagong_pilipinas.png" alt="Bagong Pilipinas" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+        </div>
+      </div>
+    `;
+    document.execCommand('insertHTML', false, html);
+  };
+
+  const insertSignatureBlock = () => {
+    const html = `
+      <div style="margin-top: 35px; display: flex; justify-content: flex-end; width: 100%;">
+        <div style="text-align: center; width: 230px;">
+          <p style="margin: 0; font-size: 13px; font-weight: bold; text-decoration: underline; text-transform: uppercase; color: #000;">EFREN V. MEDINA</p>
+          <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: bold; color: #334155;">PUNONG BARANGAY</p>
+        </div>
+      </div>
+    `;
+    document.execCommand('insertHTML', false, html);
+  };
+
+  const insertOfficialStamp = () => {
+    addOfficialSealStamp();
+  };
+
+  const handlePrintDocument = () => {
+    const printWindow = window.open('', '', 'width=850,height=1000');
+    printWindow.document.write('<html><head><title>Print Certificate</title><style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 15mm; } .print-page { height: 95vh !important; max-height: 95vh !important; display: flex; flex-direction: column; overflow: hidden; position: relative; } .word-a4-page { position: relative; } .print-body { flex: 1; } .word-attached-images-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; } .word-floating-image-render { position: absolute; } }</style></head><body style="margin: 0; padding: 20px; position: relative;">');
+    printWindow.document.write(compileDocumentWithImages(editorContent, attachedImages));
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  const getAdminToken = () => {
+    try {
+      const stored = localStorage.getItem('adminUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.token || '';
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  };
+
+  const adminFetch = async (url, options = {}) => {
+    const token = getAdminToken();
+    const headers = new Headers(options.headers || {});
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+    if (response.status === 401 || response.status === 403) {
+      console.warn(`Admin request to ${url} unauthorized (${response.status})`);
+      if (url.startsWith('/api/') && !url.includes('/api/logout') && !url.includes('/api/admin/logout')) {
+        setAuthError(true);
+      }
+    } else if (response.ok) {
+      setAuthError(false);
+    }
+    return response;
+  };
+
+  // CSV Extraction Helpers
+  const downloadCSV = (filename, csvContent) => {
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const extractCertificateRequestsCSV = (requestsToExport = certificateRequests, customSuffix = 'all') => {
+    const headers = [
+      'Request ID',
+      'Tracking Code',
+      'Resident Name',
+      'Resident Email',
+      'Age',
+      'Civil Status',
+      'Home Address',
+      'Certificate Type',
+      'Requested Date',
+      'Claimed Date',
+      'Verification Status',
+      'Process Status'
+    ];
+
+    const rows = (Array.isArray(requestsToExport) ? requestsToExport : []).map(r => [
+      r.id,
+      r.tracking_code || 'N/A',
+      r.full_name || r.resident_name || 'Unknown',
+      r.resident_email || r.email || 'N/A',
+      r.age ?? 'N/A',
+      r.civil_status || 'N/A',
+      r.address || r.home_address || 'N/A',
+      r.certificate_type || 'N/A',
+      r.request_date ? new Date(r.request_date).toLocaleString('en-US') : (r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A'),
+      r.claimed_at ? new Date(r.claimed_at).toLocaleString('en-US') : (r.process_status === 'Claimed' ? 'Claimed' : 'Not Claimed'),
+      r.verification_status || 'Not Verified',
+      r.process_status || 'In process'
+    ]);
+
+    const csv = [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCSV(`Barangay830_Certificate_Requests_${customSuffix}_${dateStr}.csv`, csv);
+  };
+
+  const extractResidentsCSV = (residentsToExport = accounts, customSuffix = 'masterlist') => {
+    const headers = [
+      'Resident ID',
+      'Full Name',
+      'Nickname',
+      'Age',
+      'Gender',
+      'Date of Birth',
+      'Civil Status',
+      'Religion',
+      'Home Address',
+      'Area',
+      'Barangay',
+      'City / Municipality',
+      'Mobile Phone',
+      'Email',
+      'Verification Status',
+      'Registered Date'
+    ];
+
+    const rows = (Array.isArray(residentsToExport) ? residentsToExport : []).map(acc => [
+      acc.id,
+      acc.full_name || 'N/A',
+      acc.nickname || '',
+      acc.age ?? 'N/A',
+      acc.gender || 'N/A',
+      acc.date_of_birth ? new Date(acc.date_of_birth).toLocaleDateString('en-US') : 'N/A',
+      acc.civil_status || 'N/A',
+      acc.religion || 'N/A',
+      acc.home_address || 'N/A',
+      acc.area || 'N/A',
+      acc.barangay || 'Barangay 830',
+      acc.city_municipality || 'City of Manila',
+      acc.mobile_phone || 'N/A',
+      acc.email || 'N/A',
+      acc.is_verified || 'Approved',
+      acc.created_at ? new Date(acc.created_at).toLocaleString('en-US') : 'N/A'
+    ]);
+
+    const csv = [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCSV(`Barangay830_Resident_Masterlist_${customSuffix}_${dateStr}.csv`, csv);
+  };
+
+  const extractPendingRegistrationsCSV = () => {
+    const headers = [
+      'ID',
+      'Full Name',
+      'Email',
+      'Age',
+      'Gender',
+      'Civil Status',
+      'Home Address',
+      'Mobile Phone',
+      'Status',
+      'Submitted Date'
+    ];
+
+    const rows = (Array.isArray(pendingRegistrations) ? pendingRegistrations : []).map(p => [
+      p.id,
+      p.full_name || 'N/A',
+      p.email || 'N/A',
+      p.age ?? 'N/A',
+      p.gender || 'N/A',
+      p.civil_status || 'N/A',
+      p.home_address || 'N/A',
+      p.mobile_phone || 'N/A',
+      p.is_verified || 'Pending',
+      p.created_at ? new Date(p.created_at).toLocaleString('en-US') : 'N/A'
+    ]);
+
+    const csv = [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCSV(`Barangay830_Pending_Registrations_${dateStr}.csv`, csv);
+  };
+
+  const extractAllRecordsBatch = () => {
+    extractCertificateRequestsCSV(certificateRequests, 'all_records');
+    setTimeout(() => {
+      extractResidentsCSV(accounts, 'masterlist');
+    }, 500);
+  };
+
+  const handleSaveCertificateDocument = async () => {
+    if (!selectedRequest || isSavingCertificate) return;
+    setIsSavingCertificate(true);
+    try {
+      const formData = new FormData();
+      formData.append('verification_status', editorVerification);
+      formData.append('process_status', editorProcess);
+      formData.append('certificate_content', compileDocumentWithImages(editorContent, attachedImages));
+      formData.append('visible_to_resident', visibleToResident);
+      if (editorProcess === 'Claimed') {
+        if (editorClaimedAt) formData.append('claimed_at', editorClaimedAt);
+      }
+      if (editorPdfFile) formData.append('pdf_file', editorPdfFile);
+      if (removePdf) formData.append('remove_pdf', 'true');
+
+      const response = await adminFetch(`/api/request/${selectedRequest.id}`, {
+        method: 'PUT',
+        body: formData
+      });
+
+      if (response.ok) {
+        await fetchRequests();
+        setSelectedRequest(null);
+        showNotification('Certificate saved successfully!', 'success');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to save certificate document. Please try again.', 'error');
+      }
+    } catch (err) {
+      console.error('Error saving certificate:', err);
+      showNotification('Network error while saving certificate: ' + err.message, 'error');
+    } finally {
+      setIsSavingCertificate(false);
+    }
+  };
 
   const [messages, setMessages] = useState([])
   const [conversations, setConversations] = useState([])
@@ -271,23 +1398,127 @@ export default function AdminDashboardPage() {
   const [editingFolderName, setEditingFolderName] = useState('')
   const messagesEndRef = React.useRef(null)
 
-  const analyticsData = useMemo(() => {
-    // 1. Registrations over time
-    const registrationsByMonth = (Array.isArray(accounts) ? accounts : []).reduce((acc, account) => {
-      const date = new Date(account.created_at);
-      if (isNaN(date.getTime())) return acc;
-      const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      acc[monthYear] = (acc[monthYear] || 0) + 1;
-      return acc;
-    }, {});
-    const registrationData = Object.keys(registrationsByMonth).map(key => ({
-      name: key,
-      Registrations: registrationsByMonth[key]
-    })).sort((a, b) => new Date(a.name) - new Date(b.name)).slice(-6); // Last 6 months
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set();
+    const currentYear = new Date().getFullYear();
+    yearsSet.add(currentYear);
+    (Array.isArray(accounts) ? accounts : []).forEach(a => {
+      if (a.created_at) {
+        const y = new Date(a.created_at).getFullYear();
+        if (!isNaN(y)) yearsSet.add(y);
+      }
+    });
+    (Array.isArray(certificateRequests) ? certificateRequests : []).forEach(r => {
+      const d = r.request_date || r.created_at;
+      if (d) {
+        const y = new Date(d).getFullYear();
+        if (!isNaN(y)) yearsSet.add(y);
+      }
+    });
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [accounts, certificateRequests]);
 
-    // 2. Certificate Requests Breakdown
-    const requestsByType = (Array.isArray(certificateRequests) ? certificateRequests : []).reduce((acc, req) => {
-      acc[req.certificate_type] = (acc[req.certificate_type] || 0) + 1;
+  const monthOptions = [
+    { value: 'All', label: 'All Months' },
+    { value: '0', label: 'January' },
+    { value: '1', label: 'February' },
+    { value: '2', label: 'March' },
+    { value: '3', label: 'April' },
+    { value: '4', label: 'May' },
+    { value: '5', label: 'June' },
+    { value: '6', label: 'July' },
+    { value: '7', label: 'August' },
+    { value: '8', label: 'September' },
+    { value: '9', label: 'October' },
+    { value: '10', label: 'November' },
+    { value: '11', label: 'December' },
+  ];
+
+  const analyticsData = useMemo(() => {
+    // 1. Filter accounts and certificate requests according to selected Year & Month
+    const filteredAccounts = (Array.isArray(accounts) ? accounts : []).filter(acc => {
+      if (!acc.created_at) return analyticsYear === 'All' && analyticsMonth === 'All';
+      const d = new Date(acc.created_at);
+      if (isNaN(d.getTime())) return false;
+      if (analyticsYear !== 'All' && d.getFullYear().toString() !== analyticsYear.toString()) return false;
+      if (analyticsMonth !== 'All' && d.getMonth().toString() !== analyticsMonth.toString()) return false;
+      return true;
+    });
+
+    const filteredRequests = (Array.isArray(certificateRequests) ? certificateRequests : []).filter(req => {
+      const rawDate = req.request_date || req.created_at;
+      if (!rawDate) return analyticsYear === 'All' && analyticsMonth === 'All';
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return false;
+      if (analyticsYear !== 'All' && d.getFullYear().toString() !== analyticsYear.toString()) return false;
+      if (analyticsMonth !== 'All' && d.getMonth().toString() !== analyticsMonth.toString()) return false;
+      return true;
+    });
+
+    // Summary counts for filtered period
+    const totalRequestsCount = filteredRequests.length;
+    const totalRegistrationsCount = filteredAccounts.length;
+    const claimedRequestsCount = filteredRequests.filter(r => r.process_status === 'Claimed').length;
+    const verifiedRequestsCount = filteredRequests.filter(r => r.verification_status === 'Verified').length;
+    const claimRate = totalRequestsCount > 0 ? Math.round((claimedRequestsCount / totalRequestsCount) * 100) : 0;
+
+    // 2. Registrations Timeline Chart
+    let registrationData = [];
+    if (analyticsMonth !== 'All') {
+      // Daily breakdown within that specific month
+      const daysMap = {};
+      const yearNum = analyticsYear === 'All' ? new Date().getFullYear() : parseInt(analyticsYear, 10);
+      const monthNum = parseInt(analyticsMonth, 10);
+      const daysInMonth = new Date(yearNum, monthNum + 1, 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        daysMap[`Day ${day}`] = 0;
+      }
+      filteredAccounts.forEach(acc => {
+        const d = new Date(acc.created_at);
+        const dayKey = `Day ${d.getDate()}`;
+        if (daysMap[dayKey] !== undefined) {
+          daysMap[dayKey]++;
+        }
+      });
+      registrationData = Object.keys(daysMap).map(key => ({
+        name: key,
+        Registrations: daysMap[key]
+      }));
+    } else if (analyticsYear !== 'All') {
+      // Month-by-month for that specific year (Jan - Dec)
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthsMap = {};
+      monthNames.forEach(m => { monthsMap[m] = 0; });
+      filteredAccounts.forEach(acc => {
+        const d = new Date(acc.created_at);
+        const m = monthNames[d.getMonth()];
+        if (monthsMap[m] !== undefined) {
+          monthsMap[m]++;
+        }
+      });
+      registrationData = monthNames.map(m => ({
+        name: m,
+        Registrations: monthsMap[m]
+      }));
+    } else {
+      // All years, all months: aggregate over time
+      const registrationsByMonth = (Array.isArray(accounts) ? accounts : []).reduce((acc, account) => {
+        const date = new Date(account.created_at);
+        if (isNaN(date.getTime())) return acc;
+        const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        acc[monthYear] = (acc[monthYear] || 0) + 1;
+        return acc;
+      }, {});
+      registrationData = Object.keys(registrationsByMonth).map(key => ({
+        name: key,
+        Registrations: registrationsByMonth[key]
+      })).sort((a, b) => new Date(a.name) - new Date(b.name)).slice(-12);
+    }
+
+    // 3. Certificate Requests Breakdown
+    const requestsByType = filteredRequests.reduce((acc, req) => {
+      const type = req.certificate_type || 'Other';
+      acc[type] = (acc[type] || 0) + 1;
       return acc;
     }, {});
     const requestTypeData = Object.keys(requestsByType).map(key => ({
@@ -295,9 +1526,10 @@ export default function AdminDashboardPage() {
       value: requestsByType[key]
     }));
 
-    // 3. Age Demographics
+    // 4. Age Demographics
+    const accountsForAge = filteredAccounts.length > 0 ? filteredAccounts : (Array.isArray(accounts) ? accounts : []);
     const ageGroups = { '18-25': 0, '26-35': 0, '36-50': 0, '51-65': 0, '65+': 0, 'Unknown': 0 };
-    (Array.isArray(accounts) ? accounts : []).forEach(account => {
+    accountsForAge.forEach(account => {
       let age = account.age;
       if (!age && account.date_of_birth) {
         age = new Date().getFullYear() - new Date(account.date_of_birth).getFullYear();
@@ -318,18 +1550,29 @@ export default function AdminDashboardPage() {
       Count: ageGroups[key]
     })).filter(data => data.Count > 0);
 
-    // 4. Request Status Breakdown
-    const statusCounts = (Array.isArray(certificateRequests) ? certificateRequests : []).reduce((acc, req) => {
-      acc[req.process_status] = (acc[req.process_status] || 0) + 1;
-      return acc;
-    }, {});
+    // 5. Request Process Status Breakdown (includes Claimed)
+    const statusCounts = { 'In process': 0, 'For Pickup': 0, 'Claimed': 0, 'Void': 0 };
+    filteredRequests.forEach(req => {
+      const st = req.process_status || 'In process';
+      statusCounts[st] = (statusCounts[st] || 0) + 1;
+    });
     const statusData = Object.keys(statusCounts).map(key => ({
       name: key,
       Count: statusCounts[key]
     }));
 
-    return { registrationData, requestTypeData, ageData, statusData };
-  }, [accounts, certificateRequests]);
+    return { 
+      registrationData, 
+      requestTypeData, 
+      ageData, 
+      statusData,
+      totalRequestsCount,
+      totalRegistrationsCount,
+      claimedRequestsCount,
+      verifiedRequestsCount,
+      claimRate
+    };
+  }, [accounts, certificateRequests, analyticsYear, analyticsMonth]);
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
   const scrollToBottom = () => {
@@ -367,6 +1610,10 @@ export default function AdminDashboardPage() {
   }
 
   useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAccounts()
+      fetchRequests()
+    }
     if (activeTab === 'requests') fetchRequests()
     if (activeTab === 'residents') fetchAccounts()
     if (activeTab === 'chat') fetchConversations()
@@ -442,7 +1689,7 @@ export default function AdminDashboardPage() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/admin/conversations')
+      const res = await adminFetch('/api/admin/conversations')
       const data = await res.json()
       setConversations(Array.isArray(data) ? data : [])
       hasFetchedRef.current.messages = true;
@@ -453,7 +1700,7 @@ export default function AdminDashboardPage() {
 
   const fetchMessages = async (userId) => {
     try {
-      const res = await fetch(`/api/messages/${userId}`)
+      const res = await adminFetch(`/api/messages/${userId}`)
       const data = await res.json()
       setMessages(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -464,7 +1711,7 @@ export default function AdminDashboardPage() {
   const handleSendMessage = async () => {
     if (!replyText.trim() || !selectedChatResident) return
     try {
-      const response = await fetch('/api/messages', {
+      const response = await adminFetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -485,7 +1732,7 @@ export default function AdminDashboardPage() {
 
   const markAsRead = async (userId) => {
     try {
-      await fetch(`/api/admin/messages/read/${userId}`, { method: 'PUT' })
+      await adminFetch(`/api/admin/messages/read/${userId}`, { method: 'PUT' })
       fetchConversations()
     } catch (err) {
       console.error('Error marking as read:', err)
@@ -534,7 +1781,7 @@ export default function AdminDashboardPage() {
 
   const fetchArchiveFolders = async () => {
     try {
-      const res = await fetch('/api/admin/archive-folders')
+      const res = await adminFetch('/api/admin/archive-folders')
       const data = await res.json()
       setArchiveFolders(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -544,7 +1791,7 @@ export default function AdminDashboardPage() {
 
   const fetchArchiveFiles = async (folderId) => {
     try {
-      const res = await fetch(`/api/admin/archive-files/${folderId}`)
+      const res = await adminFetch(`/api/admin/archive-files/${folderId}`)
       const data = await res.json()
       setArchiveFiles(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -556,7 +1803,7 @@ export default function AdminDashboardPage() {
     e.preventDefault()
     if (!newFolderName.trim()) return
     try {
-      const res = await fetch('/api/admin/archive-folders', {
+      const res = await adminFetch('/api/admin/archive-folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName })
@@ -565,11 +1812,14 @@ export default function AdminDashboardPage() {
         setNewFolderName('')
         setShowCreateFolder(false)
         fetchArchiveFolders()
+        showNotification('Folder created successfully!', 'success')
       } else {
-        alert('Failed to create folder')
+        const data = await res.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to create folder', 'error')
       }
     } catch (err) {
       console.error('Error creating folder:', err)
+      showNotification('Error creating folder: ' + err.message, 'error')
     }
   }
 
@@ -583,26 +1833,49 @@ export default function AdminDashboardPage() {
 
     setUploadingFile(true)
     try {
-      const res = await fetch('/api/admin/archive-files', {
+      const res = await adminFetch('/api/admin/archive-files', {
         method: 'POST',
         body: formData
       })
       if (res.ok) {
         fetchArchiveFiles(currentFolder.id)
+        showNotification('File uploaded successfully!', 'success')
       } else {
-        alert('Failed to upload file')
+        const data = await res.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to upload file', 'error')
       }
     } catch (err) {
       console.error('Error uploading file:', err)
+      showNotification('Error uploading file: ' + err.message, 'error')
     } finally {
       setUploadingFile(false)
       e.target.value = null
     }
   }
 
+  const handleMoveFileToFolder = async (fileId, folderId) => {
+    try {
+      const response = await adminFetch('/api/admin/archive-files/move', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, folderId: folderId ? Number(folderId) : null })
+      })
+      if (response.ok) {
+        if (currentFolder) fetchArchiveFiles(currentFolder.id)
+        showNotification('Document moved to folder successfully!', 'success')
+      } else {
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to move document', 'error')
+      }
+    } catch (err) {
+      console.error('Error moving file:', err)
+      showNotification('Error moving document: ' + err.message, 'error')
+    }
+  }
+
   const fetchAccounts = async () => {
     try {
-      const response = await fetch('/api/all-accounts')
+      const response = await adminFetch('/api/all-accounts')
       const data = await response.json()
       setAccounts(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -613,7 +1886,7 @@ export default function AdminDashboardPage() {
 
   const fetchArchivedAccounts = async () => {
     try {
-      const response = await fetch('/api/admin/archived-residents')
+      const response = await adminFetch('/api/admin/archived-residents')
       const data = await response.json()
       setArchivedAccounts(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -623,7 +1896,7 @@ export default function AdminDashboardPage() {
 
   const fetchResidentArchiveFolders = async () => {
     try {
-      const res = await fetch('/api/admin/resident-archive-folders')
+      const res = await adminFetch('/api/admin/resident-archive-folders')
       const data = await res.json()
       setResidentArchiveFolders(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -634,7 +1907,7 @@ export default function AdminDashboardPage() {
   const fetchRequests = async () => {
     setRequestLoading(true)
     try {
-      const res = await fetch('/api/all-requests')
+      const res = await adminFetch('/api/all-requests')
       const data = await res.json()
       setCertificateRequests(Array.isArray(data) ? data : [])
       hasFetchedRef.current.requests = true;
@@ -647,7 +1920,7 @@ export default function AdminDashboardPage() {
 
   const fetchPendingRegistrations = async () => {
     try {
-      const response = await fetch('/api/admin/pending-registrations')
+      const response = await adminFetch('/api/admin/pending-registrations')
       const data = await response.json()
       setPendingRegistrations(Array.isArray(data) ? data : [])
       hasFetchedRef.current.pendingReg = true;
@@ -658,7 +1931,7 @@ export default function AdminDashboardPage() {
 
   const fetchPendingUpdates = async () => {
     try {
-      const response = await fetch('/api/admin/pending-updates')
+      const response = await adminFetch('/api/admin/pending-updates')
       const data = await response.json()
       setPendingUpdates(Array.isArray(data) ? data : [])
       hasFetchedRef.current.pendingUpd = true;
@@ -670,51 +1943,60 @@ export default function AdminDashboardPage() {
   const handleApproveUpdate = async (requestId) => {
     if (!window.confirm('Approve these profile changes?')) return
     try {
-      const response = await fetch(`/api/admin/approve-update/${requestId}`, {
+      const response = await adminFetch(`/api/admin/approve-update/${requestId}`, {
         method: 'PUT'
       })
       if (response.ok) {
-        alert('Changes approved and applied!')
+        showNotification('Profile changes approved and applied!', 'success')
         fetchPendingUpdates()
         fetchAccounts()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to approve update', 'error')
       }
     } catch (err) {
       console.error('Error approving update:', err)
+      showNotification('Error approving update: ' + err.message, 'error')
     }
   }
 
   const handleRejectUpdate = async (requestId) => {
     if (!window.confirm('Reject these profile changes?')) return
     try {
-      const response = await fetch(`/api/admin/reject-update/${requestId}`, {
+      const response = await adminFetch(`/api/admin/reject-update/${requestId}`, {
         method: 'PUT'
       })
       if (response.ok) {
-        alert('Update request rejected')
+        showNotification('Update request rejected', 'info')
         fetchPendingUpdates()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to reject update', 'error')
       }
     } catch (err) {
       console.error('Error rejecting update:', err)
+      showNotification('Error rejecting update: ' + err.message, 'error')
     }
   }
 
   const handleApproveResident = async (userId) => {
     if (!window.confirm('Are you sure you want to approve this registration?')) return
     try {
-      const response = await fetch(`/api/admin/verify-resident/${userId}`, {
+      const response = await adminFetch(`/api/admin/verify-resident/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
       if (response.ok) {
-        alert('Resident approved successfully!')
+        showNotification('Resident approved successfully!', 'success')
         fetchPendingRegistrations()
         fetchAccounts()
       } else {
-        alert('Failed to approve resident')
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to approve resident', 'error')
       }
     } catch (err) {
       console.error('Error approving resident:', err)
-      alert('Error approving resident')
+      showNotification('Error approving resident: ' + err.message, 'error')
     }
   }
 
@@ -722,40 +2004,42 @@ export default function AdminDashboardPage() {
     const reason = window.prompt('Enter reason for rejection (optional):')
     if (reason === null) return
     try {
-      const response = await fetch(`/api/admin/reject-resident/${userId}`, {
+      const response = await adminFetch(`/api/admin/reject-resident/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason })
       })
       if (response.ok) {
-        alert('Resident rejected')
+        showNotification('Resident rejected', 'info')
         fetchPendingRegistrations()
       } else {
-        alert('Failed to reject resident')
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to reject resident', 'error')
       }
     } catch (err) {
       console.error('Error rejecting resident:', err)
-      alert('Error rejecting resident')
+      showNotification('Error rejecting resident: ' + err.message, 'error')
     }
   }
 
   const handleApproveAllResidents = async () => {
     if (!window.confirm('Are you sure you want to approve ALL pending registrations?')) return
     try {
-      const response = await fetch('/api/admin/verify-all-residents', {
+      const response = await adminFetch('/api/admin/verify-all-residents', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
       if (response.ok) {
-        alert('All pending residents approved successfully!')
+        showNotification('All pending residents approved successfully!', 'success')
         fetchPendingRegistrations()
         fetchAccounts()
       } else {
-        alert('Failed to approve all residents')
+        const data = await response.json().catch(() => ({}))
+        showNotification(data.message || 'Failed to approve all residents', 'error')
       }
     } catch (err) {
       console.error('Error approving all residents:', err)
-      alert('Error approving all residents')
+      showNotification('Error approving all residents: ' + err.message, 'error')
     }
   }
 
@@ -763,17 +2047,21 @@ export default function AdminDashboardPage() {
     fetchAccounts();
     fetchRequests();
     fetchConversations();
+    fetchPendingRegistrations();
+    fetchPendingUpdates();
     if (activeTab === 'archived') {
       fetchArchivedAccounts();
       if (archiveSubTab === 'files') {
         currentFolder ? fetchArchiveFiles(currentFolder.id) : fetchArchiveFolders()
+      } else if (archiveSubTab === 'residents') {
+        fetchResidentArchiveFolders();
       }
     }
   }
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/logout', { method: 'POST' });
+      await adminFetch('/api/admin/logout', { method: 'POST' });
     } catch(e) {}
     localStorage.removeItem('adminUser')
     navigate('/admin-login')
@@ -782,17 +2070,19 @@ export default function AdminDashboardPage() {
   const handleRemovePhoto = async (userId) => {
     if (!window.confirm('Are you sure you want to remove this photo?')) return;
     try {
-      const response = await fetch(`/api/admin/remove-photo/${userId}`, {
+      const response = await adminFetch(`/api/admin/remove-photo/${userId}`, {
         method: 'DELETE'
       });
       if (response.ok) {
-        alert('Photo removed successfully');
+        showNotification('Photo removed successfully', 'success');
         fetchAccounts();
       } else {
-        alert('Failed to remove photo');
+        const data = await response.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to remove photo', 'error');
       }
     } catch (err) {
       console.error('Error removing photo:', err);
+      showNotification('Error removing photo: ' + err.message, 'error');
     }
   };
 
@@ -802,18 +2092,20 @@ export default function AdminDashboardPage() {
     formData.append('photo', file);
 
     try {
-      const response = await fetch(`/api/user/${userId}`, {
+      const response = await adminFetch(`/api/user/${userId}`, {
         method: 'PUT',
         body: formData
       });
       if (response.ok) {
-        alert('Photo updated successfully');
+        showNotification('Photo updated successfully', 'success');
         fetchAccounts();
       } else {
-        alert('Failed to update photo');
+        const data = await response.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to update photo', 'error');
       }
     } catch (err) {
       console.error('Error updating photo:', err);
+      showNotification('Error updating photo: ' + err.message, 'error');
     }
   };
 
@@ -821,23 +2113,23 @@ export default function AdminDashboardPage() {
     if (!window.confirm(`Are you sure you want to archive the account for ${name}? Archived accounts are preserved and can be reviewed later.`)) return;
 
     try {
-      const response = await fetch(`/api/admin/archive-resident/${userId}`, {
+      const response = await adminFetch(`/api/admin/archive-resident/${userId}`, {
         method: 'PUT'
       });
       const data = await response.json();
 
       if (response.ok) {
-        alert('Resident account archived successfully');
+        showNotification('Resident account archived successfully', 'success');
         fetchAccounts();
         if (selectedResident && selectedResident.id === userId) {
           closeResidentDetails();
         }
       } else {
-        alert(data.message || 'Failed to archive resident');
+        showNotification(data.message || 'Failed to archive resident', 'error');
       }
     } catch (err) {
       console.error('Error archiving resident:', err);
-      alert('Error archiving resident: ' + err.message);
+      showNotification('Error archiving resident: ' + err.message, 'error');
     }
   };
 
@@ -871,7 +2163,7 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!newResidentFolderName.trim()) return;
     try {
-      const response = await fetch('/api/admin/resident-archive-folders', {
+      const response = await adminFetch('/api/admin/resident-archive-folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newResidentFolderName })
@@ -880,28 +2172,34 @@ export default function AdminDashboardPage() {
         setNewResidentFolderName('');
         setShowCreateResidentFolder(false);
         fetchResidentArchiveFolders();
+        showNotification('Folder created successfully!', 'success');
       } else {
-        alert('Failed to create folder');
+        const data = await response.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to create folder', 'error');
       }
     } catch (err) {
       console.error('Error creating folder:', err);
+      showNotification('Error creating folder: ' + err.message, 'error');
     }
   };
 
   const handleMoveResidentToFolder = async (residentId, folderId) => {
     try {
-      const response = await fetch('/api/admin/resident-archive-folders/move', {
+      const response = await adminFetch('/api/admin/resident-archive-folders/move', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ residentId, folderId })
       });
       if (response.ok) {
         fetchArchivedAccounts();
+        showNotification('Resident moved to folder successfully!', 'success');
       } else {
-        alert('Failed to move resident');
+        const data = await response.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to move resident', 'error');
       }
     } catch (err) {
       console.error('Error moving resident:', err);
+      showNotification('Network error while moving resident: ' + err.message, 'error');
     }
   };
 
@@ -916,7 +2214,7 @@ export default function AdminDashboardPage() {
         ? `/api/admin/resident-archive-folders/${folderId}`
         : `/api/admin/archive-folders/${folderId}`;
       
-      const res = await fetch(endpoint, {
+      const res = await adminFetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingFolderName })
@@ -928,11 +2226,14 @@ export default function AdminDashboardPage() {
         } else {
           fetchArchiveFolders();
         }
+        showNotification('Folder renamed successfully!', 'success');
       } else {
-        alert('Failed to rename folder');
+        const data = await res.json().catch(() => ({}));
+        showNotification(data.message || 'Failed to rename folder', 'error');
       }
     } catch (err) {
       console.error('Error renaming folder:', err);
+      showNotification('Error renaming folder: ' + err.message, 'error');
     }
   };
 
@@ -1033,6 +2334,45 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="admin-layout">
+      {/* Flux Notification Bar (Toast) */}
+      {notification && (
+        <div className="flux-toast-container" role="region" aria-label="Notifications">
+          <div className={`flux-toast-bar flux-toast-${notification.type}`} role="alert">
+            <div className="flux-toast-icon">
+              {notification.type === 'success' && '✓'}
+              {notification.type === 'error' && '✕'}
+              {notification.type === 'warning' && '⚠'}
+              {notification.type === 'info' && 'ℹ'}
+            </div>
+            <div className="flux-toast-body">
+              <div className="flux-toast-title">
+                {notification.type === 'success' && 'Success'}
+                {notification.type === 'error' && 'Error'}
+                {notification.type === 'warning' && 'Warning'}
+                {notification.type === 'info' && 'Notice'}
+              </div>
+              <div className="flux-toast-message">{notification.message}</div>
+            </div>
+            <button 
+              className="flux-toast-close" 
+              onClick={dismissNotification}
+              aria-label="Close notification"
+            >
+              ×
+            </button>
+            {notification.duration > 0 && (
+              <div className="flux-toast-progress">
+                <div 
+                  key={notification.id}
+                  className="flux-toast-progress-bar"
+                  style={{ animationDuration: `${notification.duration}ms` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside className="flux-sidebar">
         <div className="sidebar-logo">
@@ -1089,6 +2429,28 @@ export default function AdminDashboardPage() {
       <main className="flux-main">
         <header className="flux-header" style={{ justifyContent: 'flex-end', position: 'relative' }}>
           <div className="header-actions">
+            <button
+              type="button"
+              className="logout-flux-btn"
+              onClick={() => setShowExtractModal(true)}
+              title="Extract All Records to CSV/Excel format"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(135deg, #185abd 0%, #104897 100%)',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 'bold',
+                padding: '8px 14px',
+                fontSize: '13px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(24, 90, 189, 0.25)'
+              }}
+            >
+              <span>📥</span> Extract All Records
+            </button>
             <div style={{ position: 'relative' }}>
               <button 
                 className="logout-flux-btn" 
@@ -1161,6 +2523,50 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         </div>
+
+        {authError && (
+          <div style={{
+            backgroundColor: '#dc2626',
+            color: '#ffffff',
+            padding: '16px 20px',
+            borderRadius: '12px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+            border: '1px solid #ef4444'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '24px' }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight: 'bold', fontSize: '15px' }}>Administrator Session Disconnected or Expired</div>
+                <div style={{ fontSize: '13px', opacity: 0.95 }}>
+                  The server rejected data requests with 401 Unauthorized. Please sign in again to restore live database records.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem('adminUser');
+                navigate('/admin-login');
+              }}
+              style={{
+                backgroundColor: '#ffffff',
+                color: '#b91c1c',
+                border: 'none',
+                padding: '9px 18px',
+                borderRadius: '8px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+              }}
+            >
+              Sign In to Admin
+            </button>
+          </div>
+        )}
 
         {/* Welcome Banner */}
         <section className="welcome-banner">
@@ -1260,19 +2666,28 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Sort By:</label>
-                  <select 
-                    className="flux-select"
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value)}
-                    style={{ width: '160px' }}
+                    <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Sort By:</label>
+                    <select 
+                      className="flux-select"
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(e.target.value)}
+                      style={{ width: '160px' }}
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="nameAsc">Name (A-Z)</option>
+                      <option value="nameDesc">Name (Z-A)</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="logout-flux-btn"
+                    onClick={() => extractResidentsCSV(filteredAccounts, 'masterlist')}
+                    title="Extract resident masterlist to CSV"
+                    style={{ background: '#10b981', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', padding: '9px 14px', whiteSpace: 'nowrap', cursor: 'pointer' }}
                   >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="nameAsc">Name (A-Z)</option>
-                    <option value="nameDesc">Name (Z-A)</option>
-                  </select>
-                </div>
+                    <span>📥</span> Extract Records ({filteredAccounts.length})
+                  </button>
               </div>
             </div>
               <table className="flux-table">
@@ -1339,81 +2754,262 @@ export default function AdminDashboardPage() {
 
           {activeTab === 'analytics' && (
             <div className="analytics-dashboard">
-              <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-primary)' }}>📈 Analytics Overview</h2>
+              {/* Header with Month & Year Filtering */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '24px' }}>
+                <div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 6px 0', color: 'var(--text-primary)' }}>📈 Analytics Overview</h2>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Filter records by Month and Year to analyze trends and document processing.
+                  </p>
+                </div>
+
+                {/* Filter Controls */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {/* Year Select */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Year:</span>
+                    <select
+                      className="flux-select"
+                      value={analyticsYear}
+                      onChange={(e) => setAnalyticsYear(e.target.value)}
+                      style={{ padding: '7px 12px', fontSize: '13px', width: '110px' }}
+                    >
+                      <option value="All">All Years</option>
+                      {availableYears.map(yr => (
+                        <option key={yr} value={yr}>{yr}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Month Select */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Month:</span>
+                    <select
+                      className="flux-select"
+                      value={analyticsMonth}
+                      onChange={(e) => setAnalyticsMonth(e.target.value)}
+                      style={{ padding: '7px 12px', fontSize: '13px', width: '130px' }}
+                    >
+                      {monthOptions.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quick Filters */}
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <button
+                      type="button"
+                      className="logout-flux-btn"
+                      onClick={() => { setAnalyticsYear('All'); setAnalyticsMonth('All'); }}
+                      style={{ 
+                        padding: '7px 12px', 
+                        fontSize: '12px', 
+                        background: (analyticsYear === 'All' && analyticsMonth === 'All') ? 'var(--primary-color)' : 'var(--bg-secondary)', 
+                        color: (analyticsYear === 'All' && analyticsMonth === 'All') ? '#fff' : 'var(--text-primary)',
+                        border: '1px solid var(--border-color)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      All Time
+                    </button>
+                    <button
+                      type="button"
+                      className="logout-flux-btn"
+                      onClick={() => { 
+                        setAnalyticsYear(new Date().getFullYear().toString()); 
+                        setAnalyticsMonth(new Date().getMonth().toString()); 
+                      }}
+                      style={{ 
+                        padding: '7px 12px', 
+                        fontSize: '12px', 
+                        background: (analyticsYear === new Date().getFullYear().toString() && analyticsMonth === new Date().getMonth().toString()) ? 'var(--primary-color)' : 'var(--bg-secondary)', 
+                        color: (analyticsYear === new Date().getFullYear().toString() && analyticsMonth === new Date().getMonth().toString()) ? '#fff' : 'var(--text-primary)',
+                        border: '1px solid var(--border-color)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      This Month
+                    </button>
+                    <button
+                      type="button"
+                      className="logout-flux-btn"
+                      onClick={() => {
+                        const periodLabel = analyticsMonth !== 'All' ? `${monthOptions.find(m => m.value === analyticsMonth)?.label}_${analyticsYear !== 'All' ? analyticsYear : 'all'}` : analyticsYear !== 'All' ? `Year_${analyticsYear}` : 'All_Time';
+                        const filteredReqs = certificateRequests.filter(req => {
+                          const rawDate = req.request_date || req.created_at;
+                          if (!rawDate) return analyticsYear === 'All' && analyticsMonth === 'All';
+                          const d = new Date(rawDate);
+                          if (isNaN(d.getTime())) return false;
+                          if (analyticsYear !== 'All' && d.getFullYear().toString() !== analyticsYear.toString()) return false;
+                          if (analyticsMonth !== 'All' && d.getMonth().toString() !== analyticsMonth.toString()) return false;
+                          return true;
+                        });
+                        extractCertificateRequestsCSV(filteredReqs, `Filtered_${periodLabel}`);
+                      }}
+                      title="Extract records for the current filter period to CSV"
+                      style={{ 
+                        padding: '7px 12px', 
+                        fontSize: '12px', 
+                        background: '#185abd', 
+                        color: '#fff',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <span>📥</span> Extract Filtered ({analyticsData.totalRequestsCount})
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary Metric Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px 20px', borderRadius: '12px', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Certificate Requests</div>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#3b82f6', marginTop: '4px' }}>{analyticsData.totalRequestsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    {analyticsMonth !== 'All' ? `${monthOptions.find(m => m.value === analyticsMonth)?.label} ${analyticsYear !== 'All' ? analyticsYear : ''}` : analyticsYear !== 'All' ? `Year ${analyticsYear}` : 'All-time'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px 20px', borderRadius: '12px', borderLeft: '4px solid #10b981', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>New Registrations</div>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#10b981', marginTop: '4px' }}>{analyticsData.totalRegistrationsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Residents joined</div>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px 20px', borderRadius: '12px', borderLeft: '4px solid #8b5cf6', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Claimed Documents</div>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#8b5cf6', marginTop: '4px' }}>
+                    {analyticsData.claimedRequestsCount} <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-secondary)' }}>({analyticsData.claimRate}%)</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Pick-up completed</div>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px 20px', borderRadius: '12px', borderLeft: '4px solid #f59e0b', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Verified Certificates</div>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#f59e0b', marginTop: '4px' }}>{analyticsData.verifiedRequestsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>QR Authenticated</div>
+                </div>
+              </div>
               
+              {/* Analytics Charts Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', marginBottom: '40px' }}>
                 
                 {/* Registrations Over Time */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Resident Registrations (Last 6 Months)</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                    Resident Registrations {analyticsMonth !== 'All' ? `(${monthOptions.find(m => m.value === analyticsMonth)?.label} ${analyticsYear !== 'All' ? analyticsYear : ''})` : analyticsYear !== 'All' ? `(${analyticsYear})` : '(Over Time)'}
+                  </h3>
                   <div style={{ height: '300px', width: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analyticsData.registrationData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <Line type="monotone" dataKey="Registrations" stroke="#3b82f6" strokeWidth={3} dot={{ r: 5 }} />
-                        <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <RechartsTooltip />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {analyticsData.registrationData.length === 0 ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No registrations in this period</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analyticsData.registrationData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <Line type="monotone" dataKey="Registrations" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
+                          <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <RechartsTooltip />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
 
                 {/* Request Types Distribution */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Certificate Requests Breakdown</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                    Certificate Requests Breakdown {analyticsYear !== 'All' || analyticsMonth !== 'All' ? `(${analyticsMonth !== 'All' ? monthOptions.find(m => m.value === analyticsMonth)?.label : ''} ${analyticsYear !== 'All' ? analyticsYear : ''})` : ''}
+                  </h3>
                   <div style={{ height: '300px', width: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={analyticsData.requestTypeData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {analyticsData.requestTypeData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip />
-                        <Legend verticalAlign="bottom" height={36}/>
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {analyticsData.requestTypeData.length === 0 ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No certificate requests in this period</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analyticsData.requestTypeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {analyticsData.requestTypeData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                          <Legend verticalAlign="bottom" height={36}/>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
 
                 {/* Age Demographics */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Age Demographics</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                    Age Demographics {analyticsYear !== 'All' || analyticsMonth !== 'All' ? `(${analyticsMonth !== 'All' ? monthOptions.find(m => m.value === analyticsMonth)?.label : ''} ${analyticsYear !== 'All' ? analyticsYear : ''})` : ''}
+                  </h3>
                   <div style={{ height: '300px', width: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analyticsData.ageData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Bar dataKey="Count" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {analyticsData.ageData.length === 0 ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No demographic data for this period</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData.ageData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <RechartsTooltip />
+                          <Bar dataKey="Count" radius={[4, 4, 0, 0]}>
+                            {analyticsData.ageData.map((entry, index) => (
+                              <Cell key={`age-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'][index % 6]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
 
                 {/* Status Breakdown */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>Requests by Process Status</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                    Requests by Process Status {analyticsYear !== 'All' || analyticsMonth !== 'All' ? `(${analyticsMonth !== 'All' ? monthOptions.find(m => m.value === analyticsMonth)?.label : ''} ${analyticsYear !== 'All' ? analyticsYear : ''})` : ''}
+                  </h3>
                   <div style={{ height: '300px', width: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analyticsData.statusData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {analyticsData.statusData.every(d => d.Count === 0) ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No requests in this period</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData.statusData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <RechartsTooltip />
+                          <Bar dataKey="Count" radius={[4, 4, 0, 0]}>
+                            {analyticsData.statusData.map((entry, index) => {
+                              const statusColors = {
+                                'In process': '#3b82f6',
+                                'For Pickup': '#f59e0b',
+                                'Claimed': '#10b981',
+                                'Void': '#ef4444'
+                              };
+                              return <Cell key={`status-${index}`} fill={statusColors[entry.name] || '#8b5cf6'} />;
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
 
@@ -1680,15 +3276,40 @@ export default function AdminDashboardPage() {
                           <div className="file-icon">📄</div>
                           <div className="file-name" title={file.file_name}>{file.file_name}</div>
                           <div className="file-meta">{(file.file_size / 1024).toFixed(1)} KB</div>
-                          <a 
-                            href={`/api/admin/archive-files/download/${file.id}`} 
-                            download={file.file_name}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="download-btn"
-                          >
-                            Download
-                          </a>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '8px' }}>
+                            <a 
+                              href={`/api/admin/archive-files/download/${file.id}`} 
+                              download={file.file_name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="download-btn"
+                              style={{ textAlign: 'center' }}
+                            >
+                              Download
+                            </a>
+                            <select
+                              value={file.folder_id || ""}
+                              onChange={(e) => handleMoveFileToFolder(file.id, e.target.value)}
+                              style={{
+                                padding: '6px 8px',
+                                fontSize: '12px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                backgroundColor: 'var(--bg-primary)',
+                                color: 'var(--text-primary)',
+                                width: '100%',
+                                cursor: 'pointer'
+                              }}
+                              title="Move file to another folder"
+                            >
+                              <option value="" disabled>Move to folder...</option>
+                              {archiveFolders.map(f => (
+                                <option key={f.id} value={f.id} disabled={f.id === currentFolder?.id}>
+                                  {f.id === currentFolder?.id ? `✓ ${f.name} (Current)` : `📁 ${f.name}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       )) : (
                         <p style={{ color: 'var(--text-secondary)' }}>No files in this folder.</p>
@@ -2069,7 +3690,7 @@ export default function AdminDashboardPage() {
                             <button 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-purple)', padding: 0, cursor: 'pointer', fontSize: '11px', marginTop: '5px' }}
                               onClick={() => {
-                                alert(`Full details requested:\nName: ${update.full_name}\nAddress: ${update.home_address}\nPhone: ${update.mobile_phone}\nGender: ${update.gender}\nCivil Status: ${update.civil_status}`)
+                                showNotification(`Requested Profile Details — Name: ${update.full_name || 'N/A'} | Address: ${update.home_address || 'N/A'} | Phone: ${update.mobile_phone || 'N/A'} | Gender: ${update.gender || 'N/A'} | Civil Status: ${update.civil_status || 'N/A'}`, 'info', 7000)
                               }}
                             >
                               View all details
@@ -2130,6 +3751,15 @@ export default function AdminDashboardPage() {
                     <option value="For Pickup">For Pickup</option>
                     <option value="Claimed">Claimed</option>
                   </select>
+                  <button
+                    type="button"
+                    className="logout-flux-btn"
+                    onClick={() => extractCertificateRequestsCSV(filteredRequests, requestStatusFilter === 'All' ? 'all' : requestStatusFilter.toLowerCase().replace(/\s+/g, '_'))}
+                    title="Extract certificate requests to CSV"
+                    style={{ background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', padding: '9px 14px', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  >
+                    <span>📥</span> Extract Records ({filteredRequests.length})
+                  </button>
                 </div>
               </div>
               {requestLoading ? (
@@ -2148,9 +3778,10 @@ export default function AdminDashboardPage() {
                 <table className="flux-table">
                   <thead>
                     <tr>
-                      <th>Name</th>
+                      <th>Resident</th>
                       <th>Type</th>
-                      <th>Date</th>
+                      <th>Requested Date</th>
+                      <th>Claimed Date</th>
                       <th>Verification</th>
                       <th>Process</th>
                       <th>Action</th>
@@ -2162,6 +3793,17 @@ export default function AdminDashboardPage() {
                         <td>{r.full_name || r.resident_name || 'Resident #' + r.user_id}</td>
                         <td>{r.certificate_type}</td>
                         <td>{formatDateTime(r.request_date)}</td>
+                        <td>
+                          {r.process_status === 'Claimed' && r.claimed_at ? (
+                            <span style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>✅</span> {formatDateTime(r.claimed_at)}
+                            </span>
+                          ) : r.process_status === 'Claimed' ? (
+                            <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: '500' }}>Claimed</span>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: '12px' }}>—</span>
+                          )}
+                        </td>
                         <td><span className={`status-badge ${r.verification_status === 'Verified' ? 'status-verified' : r.verification_status === 'Not Valid' ? 'status-rejected' : 'status-pending'}`}>{r.verification_status}</span></td>
                         <td><span className={`status-badge ${getProcessStatusClass(r.process_status)}`}>{r.process_status}</span></td>
                         <td>
@@ -2171,9 +3813,21 @@ export default function AdminDashboardPage() {
                               style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 'bold' }}
                               onClick={() => {
                                 setSelectedRequest(r)
-                                setEditorContent(r.certificate_content || getCertificateTemplate(r))
+                                setSelectedTemplateName(r.certificate_type || '')
+                                const isLegacy = (!r.certificate_content || !r.certificate_content.trim() || (r.certificate_content.includes('is a jurisdiction of Barangay 830, Zone 90, District VI.') && !r.certificate_content.includes('EFREN V. MEDINA')));
+                                let initialContent = isLegacy ? getCertificateTemplate(r) : r.certificate_content;
+                                if (initialContent) {
+                                  initialContent = initialContent
+                                    .replace(/<div style="[^"]*">\s*Manila Seal\s*<\/div>/gi, '<img src="/logo_manila.png" alt="City of Manila Seal" style="width: 50px; height: 50px; object-fit: contain;" />')
+                                    .replace(/<div style="width:\s*90px;\s*height:\s*90px;[^"]*">\s*<span>BAGONG<\/span>\s*<span>PILIPINAS<\/span>\s*<\/div>/gi, '<div style="width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;"><img src="/logo_bagong_pilipinas.png" alt="Bagong Pilipinas" style="max-width: 100%; max-height: 100%; object-fit: contain;" /></div>');
+                                }
+                                const parsedDoc = parseDocumentAndImages(initialContent);
+                                setEditorContent(parsedDoc.cleanContent)
+                                setAttachedImages(parsedDoc.images || [])
+                                setSelectedImageId(null)
                                 setEditorVerification(r.verification_status || 'Not Verified')
                                 setEditorProcess(r.process_status || 'In process')
+                                setEditorClaimedAt(r.claimed_at ? new Date(r.claimed_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16))
                                 setEditorPdfFile(null)
                                 setRemovePdf(false)
                                 setExistingPdf(r.pdf_file || null)
@@ -2290,96 +3944,847 @@ export default function AdminDashboardPage() {
         </div>
       </main>
 
-      {/* Unified Manage & Mockup Editor Modal */}
+      {/* Unified Manage & Mockup Editor Modal (Microsoft Word Design) */}
       {selectedRequest && (
-        <div className="flux-modal-overlay" style={{ zIndex: 1000 }}>
-          <div className="flux-modal" style={{ maxWidth: '850px', width: '95%', maxHeight: '95vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header" style={{ flexShrink: 0 }}>
-              <div>
-                <h3>Manage Certificate: {selectedRequest.full_name || selectedRequest.resident_name || 'Resident'}</h3>
-                <p>Edit the official document and update status</p>
-              </div>
-              <button className="close-modal-btn" onClick={() => setSelectedRequest(null)}>✕</button>
-            </div>
+        <div className="flux-modal-overlay" style={{ zIndex: 1000, padding: '15px' }}>
+          <div className="word-window-container" style={{ maxWidth: '1050px', width: '98%' }}>
             
-            <div className="modal-body" style={{ padding: '20px', backgroundColor: '#f8fafc', color: '#0f172a', overflowY: 'auto' }}>
-              
-              <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-                <button 
-                  onClick={() => { setEditorMode('text'); setRemovePdf(true); }}
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: editorMode === 'text' ? '2px solid #3b82f6' : '1px solid #cbd5e1', background: editorMode === 'text' ? '#eff6ff' : '#fff', fontWeight: 'bold', color: editorMode === 'text' ? '#3b82f6' : '#64748b', cursor: 'pointer' }}>
-                  Use Built-in Editor
-                </button>
-                <button 
-                  onClick={() => { setEditorMode('pdf'); setRemovePdf(false); }}
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: editorMode === 'pdf' ? '2px solid #3b82f6' : '1px solid #cbd5e1', background: editorMode === 'pdf' ? '#eff6ff' : '#fff', fontWeight: 'bold', color: editorMode === 'pdf' ? '#3b82f6' : '#64748b', cursor: 'pointer' }}>
-                  Attach PDF File
-                </button>
+            {/* 1. Word Titlebar */}
+            <div className="word-titlebar">
+              <div className="word-titlebar-left">
+                <div className="word-app-badge">
+                  <span className="word-icon-square">W</span>
+                  <span>Word</span>
+                </div>
+                <div className="word-quick-tools">
+                  <button 
+                    type="button" 
+                    className="word-quick-btn" 
+                    title="Save Document (Ctrl+S)"
+                    onClick={handleSaveCertificateDocument}
+                    disabled={isSavingCertificate}
+                  >
+                    {isSavingCertificate ? '⏳' : '💾'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className="word-quick-btn" 
+                    title="Undo"
+                    onMouseDown={(e) => { e.preventDefault(); document.execCommand('undo'); }}
+                  >
+                    ↩
+                  </button>
+                  <button 
+                    type="button" 
+                    className="word-quick-btn" 
+                    title="Redo"
+                    onMouseDown={(e) => { e.preventDefault(); document.execCommand('redo'); }}
+                  >
+                    ↪
+                  </button>
+                  <button 
+                    type="button" 
+                    className="word-quick-btn" 
+                    title="Print Document"
+                    onClick={() => {
+                      const printWindow = window.open('', '', 'width=850,height=1000');
+                      printWindow.document.write('<html><head><title>Print Certificate</title><style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 15mm; } .print-page { height: 95vh !important; max-height: 95vh !important; display: flex; flex-direction: column; overflow: hidden; } .print-body { flex: 1; } }</style></head><body style="margin: 0; padding: 20px;">');
+                      printWindow.document.write(editorContent);
+                      printWindow.document.write('</body></html>');
+                      printWindow.document.close();
+                      printWindow.focus();
+                      setTimeout(() => {
+                        printWindow.print();
+                        printWindow.close();
+                      }, 500);
+                    }}
+                  >
+                    🖨️
+                  </button>
+                </div>
+                <span className="word-doc-title">
+                  {selectedTemplateName || selectedRequest.certificate_type || 'Certificate'} - {selectedRequest.full_name || selectedRequest.resident_name || 'Resident'}.docx
+                </span>
               </div>
 
-              {/* Resident Visibility Setting */}
-              <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '15px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div>
-                  <h4 style={{ margin: '0 0 5px 0', color: '#0f172a' }}>Resident Visibility</h4>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Choose which file version the resident will see on their dashboard.</p>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                    <input 
-                      type="radio" 
-                      name="visibility" 
-                      checked={visibleToResident === 'text'} 
-                      onChange={() => setVisibleToResident('text')} 
-                    />
-                    <span style={{ fontWeight: visibleToResident === 'text' ? 'bold' : 'normal', color: visibleToResident === 'text' ? '#0f172a' : '#64748b' }}>Built-in Editor Text</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                    <input 
-                      type="radio" 
-                      name="visibility" 
-                      checked={visibleToResident === 'pdf'} 
-                      onChange={() => setVisibleToResident('pdf')} 
-                    />
-                    <span style={{ fontWeight: visibleToResident === 'pdf' ? 'bold' : 'normal', color: visibleToResident === 'pdf' ? '#0f172a' : '#64748b' }}>Attached PDF</span>
-                  </label>
-                </div>
+              <div className="word-titlebar-right">
+                <button type="button" className="word-win-btn" title="Minimize">—</button>
+                <button type="button" className="word-win-btn" title="Restore">▢</button>
+                <button 
+                  type="button" 
+                  className="word-win-btn close" 
+                  title="Close Window"
+                  onClick={() => setSelectedRequest(null)}
+                >
+                  ✕
+                </button>
               </div>
+            </div>
 
-              {editorMode === 'text' ? (
-                <>
-                  {/* Formatting Toolbar */}
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center', background: '#fff', padding: '10px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('bold', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>B</button>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('italic', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', fontStyle: 'italic' }}>I</button>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('underline', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px', textDecoration: 'underline' }}>U</button>
-                    <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>• List</button>
-                    <div style={{ width: '1px', background: '#cbd5e1', margin: '0 5px' }}></div>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyLeft', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Left</button>
-                    <button type="button" onClick={(e) => { e.preventDefault(); document.execCommand('justifyCenter', false, null); }} style={{ padding: '6px 12px', cursor: 'pointer', background: '#334155', color: '#ffffff', border: 'none', borderRadius: '4px' }}>Center</button>
+            {/* 2. Word Ribbon Tabs (File, Home, Insert, Layout) */}
+            <div className="word-ribbon-tabs">
+              <button 
+                type="button" 
+                className={`word-tab word-tab-file ${activeRibbonTab === 'File' ? 'active' : ''}`}
+                onClick={() => setActiveRibbonTab('File')}
+              >
+                File
+              </button>
+              <button 
+                type="button" 
+                className={`word-tab ${activeRibbonTab === 'Home' ? 'active' : ''}`}
+                onClick={() => { setActiveRibbonTab('Home'); setEditorMode('text'); }}
+              >
+                Home
+              </button>
+              <button 
+                type="button" 
+                className={`word-tab ${activeRibbonTab === 'Insert' ? 'active' : ''}`}
+                onClick={() => { setActiveRibbonTab('Insert'); setEditorMode('text'); }}
+              >
+                Insert
+              </button>
+              <button 
+                type="button" 
+                className={`word-tab ${activeRibbonTab === 'Layout' ? 'active' : ''}`}
+                onClick={() => { setActiveRibbonTab('Layout'); setEditorMode('text'); }}
+              >
+                Layout
+              </button>
+              <button type="button" className="word-tab" onClick={() => { setActiveRibbonTab('Home'); setEditorMode('text'); }}>Review</button>
+              <button type="button" className="word-tab" onClick={() => { setActiveRibbonTab('Home'); setEditorMode('text'); }}>View</button>
+            </div>
+
+            {/* 3. Word Ribbon Toolbar Switcher */}
+            {(editorMode === 'text' || activeRibbonTab === 'File') && (
+              <>
+                {/* TAB 0: FILE RIBBON */}
+                {activeRibbonTab === 'File' && (
+                  <div className="word-ribbon-toolbar">
+                    {/* Document Mode / Source Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className={`ribbon-btn ${editorMode === 'text' ? 'active' : ''}`}
+                          title="Use Built-in Word Certificate Editor"
+                          onClick={() => { setEditorMode('text'); setRemovePdf(true); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '5px', padding: '6px 10px' }}
+                        >
+                          <span>📝</span> Word Document
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`ribbon-btn ${editorMode === 'pdf' ? 'active' : ''}`}
+                          title="Attach or View External PDF Certificate File"
+                          onClick={() => { setEditorMode('pdf'); setRemovePdf(false); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '5px', padding: '6px 10px' }}
+                        >
+                          <span>📄</span> Attach PDF File
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Document Source</div>
+                    </div>
+
+                    {/* File Operations Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Save Document Changes"
+                          onClick={handleSaveCertificateDocument}
+                          disabled={isSavingCertificate}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>{isSavingCertificate ? '⏳' : '💾'}</span> {isSavingCertificate ? 'Saving...' : 'Save'}
+                        </button>
+
+                        {editorMode === 'text' && (
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Print Document"
+                            onClick={() => {
+                              const printWindow = window.open('', '', 'width=850,height=1000');
+                              printWindow.document.write('<html><head><title>Print Certificate</title><style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 15mm; } .print-page { height: 95vh !important; max-height: 95vh !important; display: flex; flex-direction: column; overflow: hidden; } .print-body { flex: 1; } }</style></head><body style="margin: 0; padding: 20px;">');
+                              printWindow.document.write(editorContent);
+                              printWindow.document.write('</body></html>');
+                              printWindow.document.close();
+                              printWindow.focus();
+                              setTimeout(() => {
+                                printWindow.print();
+                                printWindow.close();
+                              }, 500);
+                            }}
+                            style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                          >
+                            <span>🖨️</span> Print
+                          </button>
+                        )}
+                      </div>
+                      <div className="ribbon-group-label">File Actions</div>
+                    </div>
+
+                    {/* Document Info Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', alignItems: 'center', fontSize: '11px', color: '#475563', gap: '12px', padding: '0 4px' }}>
+                        <div>
+                          <div><strong>Tracking:</strong> {selectedRequest?.tracking_code || 'N/A'}</div>
+                          <div><strong>Resident:</strong> {selectedRequest?.full_name || selectedRequest?.resident_name || 'Resident'}</div>
+                        </div>
+                      </div>
+                      <div className="ribbon-group-label">Document Info</div>
+                    </div>
                   </div>
+                )}
+                {/* TAB 1: HOME RIBBON */}
+                {activeRibbonTab === 'Home' && (
+                  <div className="word-ribbon-toolbar">
+                    {/* Clipboard / History Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content">
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Undo (Ctrl+Z)"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('undo'); }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Redo (Ctrl+Y)"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('redo'); }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Undo</div>
+                    </div>
 
-                  {/* Certificate Editor Area */}
-                  <div style={{ width: '100%', padding: '20px', position: 'relative', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-                    
-                    {/* Persistent QR Code in top right */}
-                    {qrDataUrl && (
-                      <div style={{ position: 'absolute', top: '20px', right: '20px', border: '2px solid #e2e8f0', borderRadius: '4px', padding: '2px', background: '#fff', zIndex: 10 }}>
-                        <img src={qrDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', display: 'block' }} />
-                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#0f172a', marginTop: '2px', textAlign: 'center' }}>VERIFY</div>
-                        <div style={{ fontSize: '8px', color: '#64748b', textAlign: 'center' }}>Valid for 30 Days</div>
+                    {/* Font Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <select 
+                            className="ribbon-select" 
+                            defaultValue="Arial"
+                            onChange={(e) => document.execCommand('fontName', false, e.target.value)}
+                            style={{ width: '130px' }}
+                          >
+                            <option value="Arial">Arial</option>
+                            <option value="Calibri">Calibri</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Courier New">Courier New</option>
+                          </select>
+
+                          <select 
+                            className="ribbon-select" 
+                            defaultValue="3"
+                            onChange={(e) => document.execCommand('fontSize', false, e.target.value)}
+                            style={{ width: '65px' }}
+                          >
+                            <option value="1">10 pt</option>
+                            <option value="2">11 pt</option>
+                            <option value="3">12 pt</option>
+                            <option value="4">14 pt</option>
+                            <option value="5">18 pt</option>
+                            <option value="6">24 pt</option>
+                            <option value="7">36 pt</option>
+                          </select>
+
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Increase Font Size"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('fontSize', false, '5'); }}
+                            style={{ fontWeight: 'bold', fontSize: '11px' }}
+                          >
+                            A▲
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Decrease Font Size"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('fontSize', false, '2'); }}
+                            style={{ fontWeight: 'bold', fontSize: '11px' }}
+                          >
+                            A▼
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Bold (Ctrl+B)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }}
+                            style={{ fontWeight: '900', fontFamily: 'serif' }}
+                          >
+                            B
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Italic (Ctrl+I)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }}
+                            style={{ fontStyle: 'italic', fontFamily: 'serif' }}
+                          >
+                            I
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Underline (Ctrl+U)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }}
+                            style={{ textDecoration: 'underline', fontFamily: 'serif' }}
+                          >
+                            U
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Strikethrough"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('strikeThrough'); }}
+                            style={{ textDecoration: 'line-through', fontSize: '11px' }}
+                          >
+                            abc
+                          </button>
+
+                          <label className="ribbon-btn font-color-wrapper" title="Font Color">
+                            <span style={{ fontWeight: 'bold', borderBottom: '3px solid #dc2626', lineHeight: '14px' }}>A</span>
+                            <input 
+                              type="color" 
+                              className="color-input-hidden" 
+                              defaultValue="#000000"
+                              onChange={(e) => document.execCommand('foreColor', false, e.target.value)} 
+                            />
+                          </label>
+
+                          <label className="ribbon-btn font-color-wrapper" title="Highlight Color">
+                            <span style={{ background: '#fef08a', padding: '0 2px', borderRadius: '2px', fontSize: '12px' }}>🖍</span>
+                            <input 
+                              type="color" 
+                              className="color-input-hidden" 
+                              defaultValue="#fef08a"
+                              onChange={(e) => document.execCommand('hiliteColor', false, e.target.value)} 
+                            />
+                          </label>
+
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Clear Formatting"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat'); }}
+                            style={{ fontSize: '11px' }}
+                          >
+                            <span style={{ textDecoration: 'line-through' }}>T</span>x
+                          </button>
+                        </div>
+                      </div>
+                      <div className="ribbon-group-label">Font</div>
+                    </div>
+
+                    {/* Paragraph Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Bulleted List"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Numbered List"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Decrease Indent"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('outdent'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="11 17 6 12 11 7"/><line x1="18" y1="18" x2="18" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Increase Indent"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('indent'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7"/><line x1="6" y1="18" x2="6" y2="6"/><line x1="18" y1="12" x2="6" y2="12"/></svg>
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Align Left (Ctrl+L)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('justifyLeft'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Center (Ctrl+E)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('justifyCenter'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Align Right (Ctrl+R)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('justifyRight'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="ribbon-btn" 
+                            title="Justify (Ctrl+J)"
+                            onMouseDown={(e) => { e.preventDefault(); document.execCommand('justifyFull'); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="ribbon-group-label">Paragraph</div>
+                    </div>
+
+                    {/* Quick Headings / Styles Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Heading 1"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h1'); }}
+                          style={{ fontWeight: '900', fontSize: '11px' }}
+                        >
+                          H1
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Heading 2"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h2'); }}
+                          style={{ fontWeight: 'bold', fontSize: '11px' }}
+                        >
+                          H2
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Normal Text / Paragraph"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }}
+                          style={{ fontSize: '11px' }}
+                        >
+                          ¶ Normal
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Styles</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: INSERT RIBBON */}
+                {activeRibbonTab === 'Insert' && (
+                  <div className="word-ribbon-toolbar">
+                    {/* Pictures & Floating Overlay Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                        <input 
+                          type="file" 
+                          ref={imageFileInputRef} 
+                          accept="image/*" 
+                          style={{ display: 'none' }} 
+                          onChange={handleImageFileUpload} 
+                        />
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Upload and insert an image from your computer (moves freely & overlays text)"
+                          onMouseDown={(e) => { e.preventDefault(); imageFileInputRef.current?.click(); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46', fontWeight: 'bold' }}
+                        >
+                          <span>🖼️</span> Attach Image
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Official Barangay 830 Logo"
+                          onMouseDown={(e) => { e.preventDefault(); addPresetImage('/logo_brgy.png', 'Brgy Logo'); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>🏛️</span> Brgy Logo
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Official City of Manila Seal"
+                          onMouseDown={(e) => { e.preventDefault(); addPresetImage('/logo_manila.png', 'Manila Seal', 'front', 1, 90); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>🏛️</span> Manila Seal
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Official Bagong Pilipinas Logo"
+                          onMouseDown={(e) => { e.preventDefault(); addPresetImage('/logo_bagong_pilipinas.png', 'Bagong Pilipinas', 'front', 1, 90); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>🇵🇭</span> Bagong Pilipinas
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Circular Official Dry Seal (Overlay / Watermark)"
+                          onMouseDown={(e) => { e.preventDefault(); addOfficialSealStamp(); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', color: '#dc2626' }}
+                        >
+                          <span>🔴</span> Official Seal
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Pictures & Overlay</div>
+                    </div>
+
+                    {/* Active Image Layers Selector (if images attached) */}
+                    {attachedImages.length > 0 && (
+                      <div className="ribbon-group">
+                        <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          {attachedImages.map((img, idx) => (
+                            <button
+                              key={img.id}
+                              type="button"
+                              className={`ribbon-btn ${selectedImageId === img.id ? 'active' : ''}`}
+                              onClick={() => setSelectedImageId(img.id)}
+                              style={{ fontSize: '10px', padding: '2px 6px' }}
+                              title={`Select ${img.name || 'Image'} (${img.layer === 'front' ? 'In Front' : 'Behind Text'})`}
+                            >
+                              {img.name ? (img.name.length > 10 ? img.name.slice(0, 10) + '…' : img.name) : `Img #${idx + 1}`}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="ribbon-group-label">Layers ({attachedImages.length})</div>
                       </div>
                     )}
+                    {/* Tables Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert 2x2 Grid Table"
+                          onMouseDown={(e) => { e.preventDefault(); insertTable(2, 2); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>田</span> 2×2 Table
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert 3x3 Grid Table"
+                          onMouseDown={(e) => { e.preventDefault(); insertTable(3, 3); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>▦</span> 3×3 Table
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Tables</div>
+                    </div>
 
-                    <DocumentEditor 
-                      initialContent={editorContent}
-                      requestId={selectedRequest?.id}
-                      onChange={(html) => setEditorContent(html)}
-                    />
+                    {/* Official Templates Switcher Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <select 
+                          className="ribbon-select"
+                          value={selectedTemplateName || selectedRequest?.certificate_type || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) handleApplyTemplate(val);
+                          }}
+                          style={{ width: '175px', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f0f9ff' }}
+                          title="Switch to another official Barangay 830 template"
+                        >
+                          <option value="">-- Switch Template --</option>
+                          <option value="Barangay Clearance">Barangay Clearance</option>
+                          <option value="Certificate of Indigency">Certificate of Indigency</option>
+                          <option value="Certificate of Residency">Certificate of Residency</option>
+                          <option value="First Time Job Seeker">First Time Job Seeker (RA 11261)</option>
+                          <option value="Good moral for education">Good Moral (Education)</option>
+                          <option value="Good moral for AFP/PNP">Good Moral (AFP/PNP)</option>
+                          <option value="Barangay ID">Barangay ID / Residency</option>
+                          <option value="Barangay Certificate">Barangay Certificate</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="ribbon-btn"
+                          title="Reset to fresh official template for this document"
+                          onClick={() => {
+                            if (window.confirm("Reload official Barangay 830 template? Manual unsaved edits will be replaced.")) {
+                              handleApplyTemplate(selectedRequest?.certificate_type || 'Barangay Clearance');
+                            }
+                          }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', background: '#eff6ff', borderColor: '#93c5fd' }}
+                        >
+                          <span>🔄</span> Reset
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Document Templates</div>
+                    </div>
+
+                    {/* Official Elements Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Official Barangay 830 Letterhead Header"
+                          onMouseDown={(e) => { e.preventDefault(); insertOfficialHeader(); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', background: '#eff6ff', borderColor: '#bfdbfe' }}
+                        >
+                          <span>🏛️</span> Official Header
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Official Punong Barangay Signature Line"
+                          onMouseDown={(e) => { e.preventDefault(); insertSignatureBlock(); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', background: '#eff6ff', borderColor: '#bfdbfe' }}
+                        >
+                          <span>✍️</span> Signature Block
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Red Official Stamp Badge"
+                          onMouseDown={(e) => { e.preventDefault(); insertOfficialStamp(); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px', color: '#dc2626' }}
+                        >
+                          <span>🔴</span> Official Seal
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Barangay Elements</div>
+                    </div>
+
+                    {/* Document Tools Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Divider Line"
+                          onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertHorizontalRule'); }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>―</span> Divider Line
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ribbon-btn" 
+                          title="Insert Today's Date"
+                          onMouseDown={(e) => { 
+                            e.preventDefault(); 
+                            const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                            document.execCommand('insertText', false, dateStr); 
+                          }}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>📅</span> Date Stamp
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Text & Lines</div>
+                    </div>
+
+                    {/* Special Symbols Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                        <button type="button" className="ribbon-btn" title="Philippine Peso Sign" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertText', false, '₱'); }}>₱</button>
+                        <button type="button" className="ribbon-btn" title="Checkmark" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertText', false, '✓'); }}>✓</button>
+                        <button type="button" className="ribbon-btn" title="Star" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertText', false, '★'); }}>★</button>
+                        <button type="button" className="ribbon-btn" title="Section Sign" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertText', false, '§'); }}>§</button>
+                        <button type="button" className="ribbon-btn" title="Copyright Sign" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertText', false, '©'); }}>©</button>
+                      </div>
+                      <div className="ribbon-group-label">Symbols</div>
+                    </div>
                   </div>
-                </>
+                )}
+
+                {/* TAB 3: LAYOUT RIBBON */}
+                {activeRibbonTab === 'Layout' && (
+                  <div className="word-ribbon-toolbar">
+                    {/* Orientation Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className={`ribbon-btn ${pageOrientation === 'portrait' ? 'active' : ''}`}
+                          title="Portrait Orientation (Standard Vertical)"
+                          onClick={() => setPageOrientation('portrait')}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>📄</span> Portrait
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`ribbon-btn ${pageOrientation === 'landscape' ? 'active' : ''}`}
+                          title="Landscape Orientation (Wide Certificate)"
+                          onClick={() => setPageOrientation('landscape')}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>📃</span> Landscape
+                        </button>
+                      </div>
+                      <div className="ribbon-group-label">Orientation</div>
+                    </div>
+
+                    {/* Margins Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', alignItems: 'center' }}>
+                        <select 
+                          className="ribbon-select" 
+                          value={pageMargins} 
+                          onChange={(e) => setPageMargins(e.target.value)}
+                          style={{ width: '135px' }}
+                        >
+                          <option value="normal">Normal (1.0 in)</option>
+                          <option value="narrow">Narrow (0.5 in)</option>
+                          <option value="moderate">Moderate (0.75 in)</option>
+                          <option value="wide">Wide (1.25 in)</option>
+                        </select>
+                      </div>
+                      <div className="ribbon-group-label">Margins</div>
+                    </div>
+
+                    {/* Page Background & Border Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          className={`ribbon-btn ${pageWatermark ? 'active' : ''}`}
+                          title="Toggle Official Seal Watermark in Background"
+                          onClick={() => setPageWatermark(!pageWatermark)}
+                          style={{ fontSize: '11px', display: 'flex', gap: '4px' }}
+                        >
+                          <span>🛡️</span> Watermark: {pageWatermark ? 'ON' : 'OFF'}
+                        </button>
+
+                        <select 
+                          className="ribbon-select" 
+                          value={pageBorder} 
+                          onChange={(e) => setPageBorder(e.target.value)}
+                          style={{ width: '145px' }}
+                        >
+                          <option value="none">No Page Border</option>
+                          <option value="certificate">Certificate Border</option>
+                          <option value="simple">Simple Outline</option>
+                        </select>
+                      </div>
+                      <div className="ribbon-group-label">Page Setup</div>
+                    </div>
+
+                    {/* Line Spacing Group */}
+                    <div className="ribbon-group">
+                      <div className="ribbon-group-content" style={{ display: 'flex', alignItems: 'center' }}>
+                        <select 
+                          className="ribbon-select" 
+                          value={pageLineHeight} 
+                          onChange={(e) => setPageLineHeight(e.target.value)}
+                          style={{ width: '130px' }}
+                        >
+                          <option value="1.2">1.0 (Single)</option>
+                          <option value="1.6">1.15 (Normal)</option>
+                          <option value="1.8">1.5 (1.5 lines)</option>
+                          <option value="2.2">2.0 (Double)</option>
+                        </select>
+                      </div>
+                      <div className="ribbon-group-label">Line Spacing</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Horizontal Ruler (only in Word text editor mode) */}
+                {editorMode === 'text' && (
+                  <div className="word-ruler-container">
+                    <div className="word-ruler-scale">
+                      <div className="ruler-indent-left"></div>
+                      <span className="ruler-number">1</span>
+                      <span className="ruler-number">2</span>
+                      <span className="ruler-number">3</span>
+                      <span className="ruler-number">4</span>
+                      <span className="ruler-number">5</span>
+                      <span className="ruler-number">6</span>
+                      <span className="ruler-number">7</span>
+                      <span className="ruler-number">8</span>
+                      <div className="ruler-indent-right"></div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 5. Document Workspace Canvas */}
+            <div className="word-workspace-canvas">
+              {editorMode === 'text' ? (
+                <div 
+                  className={`word-a4-page ${pageOrientation} margins-${pageMargins} border-${pageBorder} ${pageWatermark ? "has-watermark" : ""}`} 
+                  style={{ lineHeight: pageLineHeight }}
+                  onClick={() => setSelectedImageId(null)}
+                >
+                  {/* Subtle Page Header Margin Guide */}
+                  <div className="word-page-header-guide"></div>
+
+                  {/* Official Verification QR Stamp */}
+                  {qrDataUrl && (
+                    <div className="word-qr-stamp">
+                      <img src={qrDataUrl} alt="QR Code" className="word-qr-img" />
+                      <div className="word-qr-label">BARANGAY 830</div>
+                      <div className="word-qr-expiry">Valid 30 Days</div>
+                    </div>
+                  )}
+
+                  {/* Attached Floating Images (Movable & Layerable Just Like Word) */}
+                  {attachedImages.map((img) => (
+                    <FloatingDocumentImage
+                      key={img.id}
+                      img={img}
+                      isSelected={selectedImageId === img.id}
+                      onSelect={() => setSelectedImageId(img.id)}
+                      onUpdate={(updates) => updateAttachedImage(img.id, updates)}
+                      onDelete={() => deleteAttachedImage(img.id)}
+                    />
+                  ))}
+
+                  {/* Document Body */}
+                  <DocumentEditor 
+                    initialContent={editorContent}
+                    requestId={selectedRequest?.id}
+                    onChange={(html) => setEditorContent(html)}
+                  />
+
+                  {/* Subtle Page Footer Guide */}
+                  <div className="word-page-footer-guide">
+                    <span>Barangay 830, Zone 90, District VI</span>
+                    <span>Page 1 of 1</span>
+                  </div>
+                </div>
               ) : (
-                <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <div style={{ background: '#fff', padding: '40px', borderRadius: '8px', maxWidth: '800px', width: '100%', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
                   <h3 style={{ color: '#0f172a', marginBottom: '15px' }}>Attach PDF Document</h3>
                   
                   {(!editorPdfFile && (!existingPdf || removePdf)) && (
@@ -2434,68 +4839,92 @@ export default function AdminDashboardPage() {
                   )}
                 </div>
               )}
+            </div>
 
-              {/* Status Controls */}
-              <div style={{ display: 'flex', gap: '20px', marginTop: '20px', padding: '24px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Verification Status</label>
+            {/* 6. Word Status Bar */}
+            <div className="word-statusbar">
+              <div className="word-statusbar-left">
+                <div className="word-status-item">
+                  <span>Page 1 of 1</span>
+                </div>
+                <div className="word-status-item">
+                  <span>{getWordCount(editorContent)} words</span>
+                </div>
+                <div className="word-status-item">
+                  <span>English (Philippines)</span>
+                </div>
+                <div className="word-status-item">
+                  <span>✓ Accessibility: Good</span>
+                </div>
+              </div>
+
+              <div className="word-statusbar-right">
+                <div className="word-status-item" style={{ gap: '6px' }}>
+                  <span title="Print Layout" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.2)', padding: '2px 4px', borderRadius: '3px' }}>📄 Print Layout</span>
+                  <span title="Web Layout" style={{ cursor: 'pointer', padding: '2px 4px' }}>🌐 Web</span>
+                </div>
+                <div className="word-zoom-slider">
+                  <span>－</span>
+                  <span style={{ display: 'inline-block', width: '50px', height: '2px', background: 'rgba(255,255,255,0.6)', position: 'relative' }}>
+                    <span style={{ position: 'absolute', top: '-4px', left: '50%', width: '10px', height: '10px', background: '#fff', borderRadius: '50%' }}></span>
+                  </span>
+                  <span>＋</span>
+                  <span style={{ fontWeight: 'bold' }}>100%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Document Settings & Save Bar */}
+            <div className="word-mgmt-footer">
+              <div className="word-mgmt-inputs">
+                <div className="word-mgmt-field" style={{ minWidth: '220px' }}>
+                  <label className="word-mgmt-label">Resident View Mode</label>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', height: '36px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '13px' }}>
+                      <input 
+                        type="radio" 
+                        name="visibility" 
+                        checked={visibleToResident === 'text'} 
+                        onChange={() => setVisibleToResident('text')} 
+                      />
+                      <span style={{ fontWeight: visibleToResident === 'text' ? 'bold' : 'normal', color: '#1e293b' }}>Word Document</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '13px' }}>
+                      <input 
+                        type="radio" 
+                        name="visibility" 
+                        checked={visibleToResident === 'pdf'} 
+                        onChange={() => setVisibleToResident('pdf')} 
+                      />
+                      <span style={{ fontWeight: visibleToResident === 'pdf' ? 'bold' : 'normal', color: '#1e293b' }}>Attached PDF</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="word-mgmt-field">
+                  <label className="word-mgmt-label">Verification Status</label>
                   <select 
+                    className="word-mgmt-select"
                     value={editorVerification} 
                     onChange={(e) => setEditorVerification(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '12px 16px', 
-                      borderRadius: '8px', 
-                      border: '1px solid #cbd5e1', 
-                      backgroundColor: '#f8fafc', 
-                      color: '#0f172a', 
-                      fontSize: '15px', 
-                      fontWeight: '600', 
-                      outline: 'none', 
-                      cursor: 'pointer', 
-                      appearance: 'none', 
-                      backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
-                      backgroundRepeat: 'no-repeat', 
-                      backgroundPosition: 'right 16px center', 
-                      backgroundSize: '16px', 
-                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
-                      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
-                    }}
-                    onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'; }}
-                    onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; e.target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'; }}
                   >
                     <option value="Not Verified">Not Verified</option>
-                    <option value="Verified">Verified (Valid)</option>
+                    <option value="Verified">Verified (Valid 30 Days)</option>
                     <option value="Not Valid">Not Valid</option>
                   </select>
                 </div>
-                
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Process Status</label>
+
+                <div className="word-mgmt-field">
+                  <label className="word-mgmt-label">Process Status</label>
                   <select 
+                    className="word-mgmt-select"
                     value={editorProcess} 
-                    onChange={(e) => setEditorProcess(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '12px 16px', 
-                      borderRadius: '8px', 
-                      border: '1px solid #cbd5e1', 
-                      backgroundColor: '#f8fafc', 
-                      color: '#0f172a', 
-                      fontSize: '15px', 
-                      fontWeight: '600', 
-                      outline: 'none', 
-                      cursor: 'pointer', 
-                      appearance: 'none', 
-                      backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
-                      backgroundRepeat: 'no-repeat', 
-                      backgroundPosition: 'right 16px center', 
-                      backgroundSize: '16px', 
-                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
-                      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                    onChange={(e) => {
+                      setEditorProcess(e.target.value);
+                      if (e.target.value === 'Claimed' && !editorClaimedAt) {
+                        setEditorClaimedAt(new Date().toISOString().slice(0, 16));
+                      }
                     }}
-                    onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'; }}
-                    onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; e.target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'; }}
                   >
                     <option value="In process">In process</option>
                     <option value="For Pickup">For Pickup</option>
@@ -2503,19 +4932,34 @@ export default function AdminDashboardPage() {
                     <option value="Void">Void</option>
                   </select>
                 </div>
+
+                {editorProcess === 'Claimed' && (
+                  <div className="word-mgmt-field">
+                    <label className="word-mgmt-label">Claimed Date & Time</label>
+                    <input 
+                      type="datetime-local" 
+                      className="word-mgmt-select"
+                      value={editorClaimedAt} 
+                      onChange={(e) => setEditorClaimedAt(e.target.value)} 
+                    />
+                  </div>
+                )}
               </div>
 
-              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="word-mgmt-actions">
                 <button 
+                  type="button" 
+                  className="word-btn-cancel"
                   onClick={() => setSelectedRequest(null)}
-                  style={{ padding: '12px 24px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 {editorMode === 'text' && (
                   <button 
+                    type="button" 
+                    className="word-btn-print"
                     onClick={() => {
-                      const printWindow = window.open('', '', 'width=800,height=1000');
+                      const printWindow = window.open('', '', 'width=850,height=1000');
                       printWindow.document.write('<html><head><title>Print Certificate</title><style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 15mm; } .print-page { height: 95vh !important; max-height: 95vh !important; display: flex; flex-direction: column; overflow: hidden; } .print-body { flex: 1; } }</style></head><body style="margin: 0; padding: 20px;">');
                       printWindow.document.write(editorContent);
                       printWindow.document.write('</body></html>');
@@ -2526,42 +4970,135 @@ export default function AdminDashboardPage() {
                         printWindow.close();
                       }, 500);
                     }}
-                    style={{ padding: '12px 24px', borderRadius: '6px', border: 'none', background: '#10b981', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
                   >
-                    Print Document
+                    <span>🖨️</span> Print
                   </button>
                 )}
                 <button 
-                  onClick={async () => {
-                    try {
-                      const formData = new FormData();
-                      formData.append('verification_status', editorVerification);
-                      formData.append('process_status', editorProcess);
-                      formData.append('certificate_content', editorContent);
-                      formData.append('visible_to_resident', visibleToResident);
-                      if (editorPdfFile) {
-                        formData.append('pdf_file', editorPdfFile);
-                      }
-                      if (removePdf) {
-                        formData.append('remove_pdf', 'true');
-                      }
-                      
-                      const response = await fetch(`/api/request/${selectedRequest.id}`, {
-                        method: 'PUT',
-                        body: formData
-                      });
-                      
-                      if (response.ok) {
-                        fetchRequests()
-                        setSelectedRequest(null)
-                      }
-                    } catch(err) {
-                      console.error('Error saving changes:', err)
-                    }
-                  }}
-                  style={{ padding: '12px 24px', borderRadius: '6px', border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                  type="button" 
+                  className="word-btn-save"
+                  onClick={handleSaveCertificateDocument}
+                  disabled={isSavingCertificate}
+                  style={{ opacity: isSavingCertificate ? 0.7 : 1, cursor: isSavingCertificate ? 'not-allowed' : 'pointer' }}
                 >
-                  Save Document
+                  <span>{isSavingCertificate ? '⏳' : '💾'}</span> {isSavingCertificate ? 'Saving Document...' : 'Save Document'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Extract All Records Modal */}
+      {showExtractModal && (
+        <div className="flux-modal-overlay" style={{ zIndex: 3000 }}>
+          <div className="flux-modal" style={{ maxWidth: '640px', width: '92%', borderRadius: '16px', background: 'var(--card-bg)' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-color)' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
+                  <span>📥</span> Extract All Records
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Export official Barangay 830 data to Excel/CSV format for archiving and reports.
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowExtractModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Option 1: Certificate Requests */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ fontSize: '26px', background: 'rgba(59, 130, 246, 0.1)', padding: '10px', borderRadius: '10px' }}>📄</div>
+                  <div>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: 'var(--text-primary)' }}>Certificate Requests</h4>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Tracking codes, resident details, request dates, claimed dates, and statuses.
+                    </p>
+                    <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                      {certificateRequests.length} Total Records
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => extractCertificateRequestsCSV(certificateRequests, 'all')}
+                  className="logout-flux-btn"
+                  style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                >
+                  Download CSV
+                </button>
+              </div>
+
+              {/* Option 2: Resident Masterlist */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ fontSize: '26px', background: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '10px' }}>👥</div>
+                  <div>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: 'var(--text-primary)' }}>Resident Masterlist</h4>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Complete active resident database, contact numbers, addresses, and registration dates.
+                    </p>
+                    <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', background: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                      {accounts.length} Active Residents
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => extractResidentsCSV(accounts, 'masterlist')}
+                  className="logout-flux-btn"
+                  style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                >
+                  Download CSV
+                </button>
+              </div>
+
+              {/* Option 3: Pending Registrations */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ fontSize: '26px', background: 'rgba(245, 158, 11, 0.1)', padding: '10px', borderRadius: '10px' }}>⏳</div>
+                  <div>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: 'var(--text-primary)' }}>Pending Registrations</h4>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      New resident submissions awaiting verification and approval.
+                    </p>
+                    <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                      {pendingRegistrations.length} Pending Records
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={extractPendingRegistrationsCSV}
+                  disabled={pendingRegistrations.length === 0}
+                  className="logout-flux-btn"
+                  style={{ background: '#f59e0b', color: '#fff', border: 'none', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap', opacity: pendingRegistrations.length === 0 ? 0.5 : 1, cursor: pendingRegistrations.length === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  Download CSV
+                </button>
+              </div>
+
+              {/* Master One-Click Batch Download */}
+              <div style={{ marginTop: '4px', padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(24, 90, 189, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)', border: '1px dashed #3b82f6', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>
+                  Extract all datasets at once:
+                </p>
+                <button
+                  type="button"
+                  onClick={extractAllRecordsBatch}
+                  className="logout-flux-btn"
+                  style={{ padding: '10px 24px', fontSize: '14px', fontWeight: 'bold', background: 'linear-gradient(135deg, #185abd 0%, #104897 100%)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(24, 90, 189, 0.3)' }}
+                >
+                  ⚡ Extract All Records (Batch Export)
                 </button>
               </div>
 

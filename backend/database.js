@@ -16,7 +16,11 @@ const app = express();
 app.use(helmet());
 app.use(cookieParser());
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+        // Allow requests with no origin or reflect any origin for seamless Vercel / localhost deployment
+        if (!origin) return callback(null, true);
+        return callback(null, true);
+    },
     credentials: true
 }));
 
@@ -39,11 +43,39 @@ const authenticateToken = (req, res, next) => {
         return next();
     }
 
-    const token = req.cookies.token;
+    let token = null;
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7).trim();
+    }
+    if (!token && req.headers['x-access-token']) {
+        token = req.headers['x-access-token'];
+    }
+
+    const isAdminRoute = req.path.startsWith('/api/admin') || req.path === '/api/all-accounts' || req.path === '/api/all-requests';
+
+    if (!token) {
+        if (isAdminRoute) {
+            token = req.cookies?.admin_token || req.cookies?.token || req.cookies?.resident_token;
+        } else {
+            token = req.cookies?.resident_token || req.cookies?.token || req.cookies?.admin_token;
+        }
+    }
+
     if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
     
     jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret', (err, user) => {
-        if (err) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+        if (err) {
+            const fallbackToken = isAdminRoute ? req.cookies?.token : req.cookies?.admin_token;
+            if (fallbackToken && fallbackToken !== token) {
+                return jwt.verify(fallbackToken, process.env.JWT_SECRET || 'fallback_secret', (err2, user2) => {
+                    if (err2) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+                    req.user = user2;
+                    return next();
+                });
+            }
+            return res.status(403).json({ error: 'Forbidden: Invalid token' });
+        }
         req.user = user;
         next();
     });
@@ -63,10 +95,10 @@ const upload = multer({
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
-  port: process.env.DB_PORT || 3306,
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'brgy_database',
+  database: process.env.DB_NAME || 'defaultdb',
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
@@ -171,7 +203,7 @@ const pool = mysql.createPool({
         verification_status VARCHAR(50) DEFAULT 'Not Verified',
         verified_at DATETIME DEFAULT NULL,
         process_status ENUM('In process', 'For Pickup', 'Claimed', 'Void') DEFAULT 'In process',
-        certificate_content TEXT,
+        certificate_content LONGTEXT,
         request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES residents(id)
@@ -287,6 +319,29 @@ const pool = mysql.createPool({
         console.log("Added verified_at column to certificate_requests.");
       }
       await connection.query("UPDATE certificate_requests SET verified_at = COALESCE(request_date, created_at, NOW()) WHERE verification_status = 'Verified' AND verified_at IS NULL");
+
+      // Add visible_to_resident to certificate_requests if missing
+      const [visCols] = await connection.query("SHOW COLUMNS FROM certificate_requests LIKE 'visible_to_resident'");
+      if (visCols.length === 0) {
+        await connection.query("ALTER TABLE certificate_requests ADD COLUMN visible_to_resident ENUM('text','pdf') DEFAULT 'text'");
+        console.log("Added visible_to_resident column to certificate_requests.");
+      }
+
+      // Add pdf_file to certificate_requests if missing
+      const [pdfCols] = await connection.query("SHOW COLUMNS FROM certificate_requests LIKE 'pdf_file'");
+      if (pdfCols.length === 0) {
+        await connection.query("ALTER TABLE certificate_requests ADD COLUMN pdf_file LONGBLOB DEFAULT NULL");
+        console.log("Added pdf_file column to certificate_requests.");
+      }
+
+      await connection.query("ALTER TABLE certificate_requests MODIFY COLUMN certificate_content LONGTEXT").catch(() => {});
+
+      // Add claimed_at to certificate_requests if missing
+      const [claimCols] = await connection.query("SHOW COLUMNS FROM certificate_requests LIKE 'claimed_at'");
+      if (claimCols.length === 0) {
+        await connection.query("ALTER TABLE certificate_requests ADD COLUMN claimed_at DATETIME DEFAULT NULL");
+        console.log("Added claimed_at column to certificate_requests.");
+      }
       // Backfill missing tracking_codes
       const [rowsToBackfill] = await connection.query("SELECT id FROM certificate_requests WHERE tracking_code IS NULL");
       if (rowsToBackfill.length > 0) {
@@ -375,9 +430,13 @@ app.post("/api/login", async (req, res) => {
               }
             }
             if (!match) return res.status(401).json({ message: "Wrong password" });
-              const token = jwt.sign({ id: user.id, role: 'resident' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '1d' });
-              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
-              res.json({ user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null } });
+              const token = jwt.sign({ id: user.id, role: 'resident' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '7d' });
+              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+              res.cookie('resident_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+              res.json({ 
+                user: { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email, gender: user.gender, age: user.age, photo: user.photo ? `data:image/jpeg;base64,${user.photo.toString('base64')}` : null },
+                token: token
+              });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -401,9 +460,13 @@ app.post("/api/admin/login", async (req, res) => {
               }
             }
             if (!match) return res.status(401).json({ message: "Wrong password" });
-              const token = jwt.sign({ id: admin.id, role: 'admin' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '1d' });
-              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
-              res.json({ admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
+              const token = jwt.sign({ id: admin.id, role: 'admin' }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '7d' });
+              res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+              res.cookie('admin_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+              res.json({ 
+                admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role },
+                token: token
+              });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -655,7 +718,14 @@ app.use((err, req, res, next) => {
 
 app.post('/api/logout', (req, res) => {
     res.clearCookie('token');
+    res.clearCookie('resident_token');
     res.json({ message: 'Logged out' });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+    res.clearCookie('token');
+    res.clearCookie('admin_token');
+    res.json({ message: 'Admin logged out' });
 });
 app.get("/api/all-requests", async (req, res) => {
     try {
@@ -701,11 +771,11 @@ app.get("/api/all-requests", async (req, res) => {
 app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
     try {
         const { id } = req.params;
-        const { verification_status, process_status, certificate_content, remove_pdf, visible_to_resident } = req.body;
+        const { verification_status, process_status, certificate_content, remove_pdf, visible_to_resident, claimed_at } = req.body;
         const connection = await pool.getConnection();
         try {
-            // Check existing record to manage verified_at date
-            const [currentRows] = await connection.execute("SELECT verification_status, verified_at FROM certificate_requests WHERE id = ?", [id]);
+            // Check existing record to manage verified_at and claimed_at dates
+            const [currentRows] = await connection.execute("SELECT verification_status, verified_at, process_status, claimed_at FROM certificate_requests WHERE id = ?", [id]);
             const current = currentRows[0];
             let verifiedAt = current ? current.verified_at : null;
 
@@ -717,8 +787,19 @@ app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
                 verifiedAt = null;
             }
 
-            let updateQuery = "UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=?, visible_to_resident=?, verified_at=?";
-            let queryParams = [verification_status, process_status, certificate_content || null, visible_to_resident || 'text', verifiedAt];
+            let claimedAt = current ? current.claimed_at : null;
+            if (process_status === 'Claimed') {
+                if (claimed_at) {
+                    claimedAt = new Date(claimed_at);
+                } else if (!claimedAt || current?.process_status !== 'Claimed') {
+                    claimedAt = new Date();
+                }
+            } else {
+                claimedAt = null;
+            }
+
+            let updateQuery = "UPDATE certificate_requests SET verification_status=?, process_status=?, certificate_content=?, visible_to_resident=?, verified_at=?, claimed_at=?";
+            let queryParams = [verification_status, process_status, certificate_content || null, visible_to_resident || 'text', verifiedAt, claimedAt];
 
             if (req.file) {
                 updateQuery += ", pdf_file=?";
@@ -731,7 +812,7 @@ app.put("/api/request/:id", upload.single('pdf_file'), async (req, res) => {
             queryParams.push(id);
 
             await connection.execute(updateQuery, queryParams);
-            res.json({ message: "Request updated successfully", verified_at: verifiedAt });
+            res.json({ message: "Request updated successfully", verified_at: verifiedAt, claimed_at: claimedAt });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -932,6 +1013,23 @@ app.post("/api/admin/resident-archive-folders", async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// IMPORTANT: /move MUST be registered BEFORE /:id so Express does not match /move as /:id !
+app.put("/api/admin/resident-archive-folders/move", async (req, res) => {
+    try {
+        const { residentId, folderId } = req.body;
+        if (!residentId) return res.status(400).json({ message: 'Resident ID is required' });
+        const targetFolder = (folderId === '' || folderId === 'null' || folderId === null || folderId === undefined) ? null : Number(folderId);
+        const connection = await pool.getConnection();
+        try {
+            await connection.execute("UPDATE residents SET archive_folder_id = ? WHERE id = ?", [targetFolder, Number(residentId)]);
+            res.json({ message: 'Resident moved to folder successfully' });
+        } finally { connection.release(); }
+    } catch (err) { 
+        console.error("Error moving resident to folder:", err);
+        res.status(500).json({ message: err.message }); 
+    }
+});
+
 app.put("/api/admin/resident-archive-folders/:id", async (req, res) => {
     try {
         const { id } = req.params;
@@ -941,18 +1039,6 @@ app.put("/api/admin/resident-archive-folders/:id", async (req, res) => {
         try {
             await connection.execute("UPDATE resident_archive_folders SET name = ? WHERE id = ?", [name, id]);
             res.json({ message: 'Folder renamed successfully' });
-        } finally { connection.release(); }
-    } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.put("/api/admin/resident-archive-folders/move", async (req, res) => {
-    try {
-        const { residentId, folderId } = req.body;
-        if (!residentId) return res.status(400).json({ message: 'Resident ID is required' });
-        const connection = await pool.getConnection();
-        try {
-            await connection.execute("UPDATE residents SET archive_folder_id = ? WHERE id = ?", [folderId || null, residentId]);
-            res.json({ message: 'Resident moved to folder successfully' });
         } finally { connection.release(); }
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -1047,40 +1133,21 @@ app.post("/api/admin/archive-files", upload.single('file'), async (req, res) => 
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// Resident Archive Folders
-app.get("/api/admin/resident-archive-folders", async (req, res) => {
+// Move an archive file to another folder
+app.put("/api/admin/archive-files/move", async (req, res) => {
     try {
+        const { fileId, folderId } = req.body;
+        if (!fileId) return res.status(400).json({ message: 'File ID is required' });
+        if (!folderId) return res.status(400).json({ message: 'Folder ID is required' });
         const connection = await pool.getConnection();
         try {
-            const [rows] = await connection.execute("SELECT * FROM resident_archive_folders ORDER BY created_at DESC");
-            res.json(rows);
+            await connection.execute("UPDATE archive_files SET folder_id = ? WHERE id = ?", [Number(folderId), Number(fileId)]);
+            res.json({ message: 'File moved to folder successfully' });
         } finally { connection.release(); }
-    } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.post("/api/admin/resident-archive-folders", async (req, res) => {
-    try {
-        const { name } = req.body;
-        if (!name) return res.status(400).json({ message: 'Folder name is required' });
-        const connection = await pool.getConnection();
-        try {
-            const [result] = await connection.execute("INSERT INTO resident_archive_folders (name) VALUES (?)", [name]);
-            res.status(201).json({ id: result.insertId, name });
-        } finally { connection.release(); }
-    } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.put("/api/admin/resident-archive-folders/:id", async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name } = req.body;
-        if (!name) return res.status(400).json({ message: 'Folder name is required' });
-        const connection = await pool.getConnection();
-        try {
-            await connection.execute("UPDATE resident_archive_folders SET name = ? WHERE id = ?", [name, id]);
-            res.json({ message: 'Folder renamed successfully' });
-        } finally { connection.release(); }
-    } catch (err) { res.status(500).json({ message: err.message }); }
+    } catch (err) { 
+        console.error("Error moving archive file:", err);
+        res.status(500).json({ message: err.message }); 
+    }
 });
 
 // Archived Residents
@@ -1094,18 +1161,6 @@ app.get("/api/admin/archived-residents", async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-app.put("/api/admin/resident/:id/folder", async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { folder_id } = req.body;
-        const connection = await pool.getConnection();
-        try {
-            await connection.execute("UPDATE residents SET archive_folder_id = ? WHERE id = ?", [folder_id, id]);
-            res.json({ message: 'Resident moved to folder successfully' });
-        } finally { connection.release(); }
-    } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
 
 // --- VERIFY CERTIFICATE PUBLIC ENDPOINT ---
 app.get("/api/verify/:id", async (req, res) => {
@@ -1115,7 +1170,7 @@ app.get("/api/verify/:id", async (req, res) => {
         try {
             const numId = isNaN(Number(id)) ? -1 : Number(id);
             const [rows] = await connection.execute(
-                "SELECT id, tracking_code, verification_status, certificate_type, verified_at, request_date, created_at FROM certificate_requests WHERE tracking_code = ? OR id = ?",
+                "SELECT id, tracking_code, verification_status, process_status, certificate_type, verified_at, claimed_at, request_date, created_at FROM certificate_requests WHERE tracking_code = ? OR id = ?",
                 [id, numId]
             );
             if (rows.length === 0) {
@@ -1152,6 +1207,8 @@ app.get("/api/verify/:id", async (req, res) => {
                 is_verified: isVerified,
                 is_expired: isExpired,
                 status: isExpired ? 'Expired' : request.verification_status,
+                process_status: request.process_status,
+                claimed_at: request.claimed_at ? new Date(request.claimed_at).toISOString() : null,
                 type: request.certificate_type,
                 tracking_code: request.tracking_code,
                 verified_at: verifiedDate ? new Date(verifiedDate).toISOString() : null,

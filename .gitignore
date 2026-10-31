@@ -10,6 +10,7 @@ Frontend/.env
 !backend/.env.example
 
 # Dependencies
+node_modules/
 Frontend/node_modules/
 
 # Production build

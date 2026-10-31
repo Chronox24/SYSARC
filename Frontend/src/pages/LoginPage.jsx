@@ -32,6 +32,7 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           email,
           password
@@ -53,6 +54,7 @@ export default function LoginPage() {
         nickname: data.user.nickname,
         gender: data.user.gender,
         age: data.user.age,
+        token: data.token,
         loginTime: new Date().toISOString()
       }))
       

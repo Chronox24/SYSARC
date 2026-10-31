@@ -1,0 +1,665 @@
+/* Microsoft Word Professional Styling for Barangay Document Editor */
+
+.word-window-container {
+  display: flex;
+  flex-direction: column;
+  background-color: #f3f4f6;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+  border: 1px solid #185abd;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  max-height: 94vh;
+}
+
+/* 1. Word Titlebar */
+.word-titlebar {
+  background: linear-gradient(180deg, #185abd 0%, #104897 100%);
+  color: #ffffff;
+  height: 38px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  border-bottom: 1px solid #0d3875;
+}
+
+.word-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.word-app-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.word-icon-square {
+  width: 22px;
+  height: 22px;
+  background-color: #ffffff;
+  color: #185abd;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.word-quick-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.word-quick-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 13px;
+}
+
+.word-quick-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.word-doc-title {
+  font-size: 12px;
+  color: #e0e7ff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 380px;
+}
+
+.word-titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.word-win-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.word-win-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.word-win-btn.close:hover {
+  background-color: #dc2626;
+  color: #fff;
+}
+
+/* 2. Word Ribbon Menu Tabs */
+.word-ribbon-tabs {
+  background-color: #104897;
+  display: flex;
+  align-items: flex-end;
+  padding-left: 10px;
+  gap: 2px;
+}
+
+.word-tab {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #e0e7ff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.word-tab:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.word-tab.active {
+  background-color: #f3f4f6;
+  color: #185abd;
+  font-weight: 700;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+}
+
+.word-tab.word-tab-file {
+  background-color: #0e3a79;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.word-tab.word-tab-file:hover {
+  background-color: #0b2e61;
+  color: #ffffff;
+}
+
+.word-tab.word-tab-file.active {
+  background-color: #f3f4f6;
+  color: #185abd;
+  font-weight: 700;
+}
+
+/* 3. Word Ribbon Toolbar */
+.word-ribbon-toolbar {
+  background-color: #f3f4f6;
+  border-bottom: 1px solid #d1d5db;
+  padding: 6px 12px 3px 12px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+.ribbon-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: 1px solid #e5e7eb;
+  padding-right: 8px;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.ribbon-group:last-child {
+  border-right: none;
+}
+
+.ribbon-group-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+}
+
+.ribbon-group-label {
+  font-size: 10px;
+  color: #6b7280;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+/* Ribbon Controls */
+.ribbon-btn {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #1f2937;
+  padding: 6px 9px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 32px;
+  height: 32px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.ribbon-btn:hover {
+  background-color: #e0e7ff;
+  border-color: #93c5fd;
+  color: #185abd;
+}
+
+.ribbon-btn:active {
+  background-color: #c7d2fe;
+}
+
+.ribbon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ribbon-select {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #1f2937;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  height: 32px;
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.ribbon-select:focus {
+  border-color: #3b82f6;
+}
+
+.font-color-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.color-input-hidden {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+}
+
+/* 4. Word Ruler */
+.word-ruler-container {
+  background-color: #ffffff;
+  border-bottom: 1px solid #cbd5e1;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+}
+
+.word-ruler-scale {
+  width: 100%;
+  max-width: 800px;
+  height: 100%;
+  background: repeating-linear-gradient(
+    to right,
+    #94a3b8 0px,
+    #94a3b8 1px,
+    transparent 1px,
+    transparent 20px
+  );
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40px;
+}
+
+.ruler-number {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.ruler-indent-left {
+  position: absolute;
+  left: 36px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid #185abd;
+  cursor: pointer;
+}
+
+.ruler-indent-right {
+  position: absolute;
+  right: 36px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid #185abd;
+  cursor: pointer;
+}
+
+/* 5. Document Workspace & A4 Page */
+.word-workspace-canvas {
+  background: #cbd5e1;
+  padding: 30px 20px 40px 20px;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  flex: 1;
+  min-height: 520px;
+  max-height: 60vh;
+}
+
+.word-a4-page {
+  background-color: #ffffff;
+  width: 100%;
+  max-width: 820px;
+  min-height: 1050px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 56px 64px 80px 64px;
+  position: relative;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+/* Header margin indicator line */
+.word-page-header-guide {
+  position: absolute;
+  top: 42px;
+  left: 64px;
+  right: 64px;
+  border-bottom: 1px dashed #cbd5e1;
+  pointer-events: none;
+}
+
+/* Official QR Stamp */
+.word-qr-stamp {
+  position: absolute;
+  top: 35px;
+  right: 45px;
+  border: 2px solid #0f172a;
+  border-radius: 6px;
+  padding: 4px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  text-align: center;
+  z-index: 10;
+}
+
+.word-qr-img {
+  width: 80px;
+  height: 80px;
+  display: block;
+}
+
+.word-qr-label {
+  font-size: 8px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.word-qr-expiry {
+  font-size: 7px;
+  color: #16a34a;
+  font-weight: 700;
+}
+
+/* Document content area */
+.word-editor-content {
+  outline: none;
+  min-height: 750px;
+  color: #111827;
+  font-family: Arial, 'Segoe UI', Calibri, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+/* Floating Attached Image Layer */
+.word-floating-image-wrapper {
+  position: absolute;
+  box-sizing: border-box;
+  touch-action: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.word-floating-image-wrapper.selected {
+  outline: 2px dashed #2563eb !important;
+  outline-offset: 3px;
+}
+
+.word-floating-image-wrapper:hover {
+  outline: 1px dashed #93c5fd;
+  outline-offset: 2px;
+}
+
+.word-floating-image-render {
+  position: absolute;
+  display: block;
+}
+
+.word-attached-images-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.word-editor-content p {
+  margin-bottom: 14px;
+}
+
+/* Footer margin guide */
+.word-page-footer-guide {
+  position: absolute;
+  bottom: 45px;
+  left: 64px;
+  right: 64px;
+  border-top: 1px dashed #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+/* 6. Word Status Bar */
+.word-statusbar {
+  background-color: #185abd;
+  color: #ffffff;
+  height: 28px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  user-select: none;
+}
+
+.word-statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.word-status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.word-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.word-zoom-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+/* 7. Bottom Settings Bar for Certificate Management */
+.word-mgmt-footer {
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.word-mgmt-inputs {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.word-mgmt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+}
+
+.word-mgmt-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+}
+
+.word-mgmt-select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.word-mgmt-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.word-btn-print {
+  padding: 9px 18px;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.word-btn-print:hover {
+  background-color: #059669;
+}
+
+.word-btn-save {
+  padding: 9px 22px;
+  background-color: #185abd;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(24, 90, 189, 0.3);
+  transition: background 0.15s;
+}
+
+.word-btn-save:hover {
+  background-color: #104897;
+}
+
+.word-btn-cancel {
+  padding: 9px 16px;
+  background-color: #f1f5f9;
+  color: #475563;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.word-btn-cancel:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+
+/* Ribbon Button Active State */
+.ribbon-btn.active {
+  background-color: #dbeafe !important;
+  border-color: #3b82f6 !important;
+  color: #1d4ed8 !important;
+  font-weight: 700 !important;
+}
+
+/* Page Layout Variations */
+.word-a4-page.landscape {
+  max-width: 1020px !important;
+  min-height: 740px !important;
+}
+
+.word-a4-page.margins-narrow {
+  padding: 30px 36px 45px 36px !important;
+}
+
+.word-a4-page.margins-moderate {
+  padding: 42px 48px 56px 48px !important;
+}
+
+.word-a4-page.margins-wide {
+  padding: 64px 88px 90px 88px !important;
+}
+
+.word-a4-page.border-certificate {
+  border: 6px double #1e3a8a !important;
+  outline: 2px solid #b45309 !important;
+  outline-offset: -5px !important;
+}
+
+.word-a4-page.border-simple {
+  border: 2px solid #0f172a !important;
+}
+
+.word-a4-page.has-watermark {
+  background-image: url('./bg.png') !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: 380px 380px !important;
+}
