@@ -10,3 +10,4 @@ if (fs.existsSync('Frontend') && fs.existsSync('Frontend/package.json')) {
   console.log('Detected Frontend folder. Running vite build...');
   execSync('npx vite build', { stdio: 'inherit' });
 }
+
