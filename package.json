@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "cd Frontend && npm install && npm run build",
+    "build": "node build.cjs",
     "start": "node backend/database.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
